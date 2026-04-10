@@ -1,0 +1,74 @@
+from argparse import ArgumentParser
+import os
+import shutil
+
+
+BENCH_DATA_DIR = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data")
+SKIP_ENTRIES = {"blender_files"}
+
+
+def get_task_dirs():
+    entries = sorted(os.listdir(BENCH_DATA_DIR))
+    return [
+        os.path.join(BENCH_DATA_DIR, e)
+        for e in entries
+        if e not in SKIP_ENTRIES and os.path.isdir(os.path.join(BENCH_DATA_DIR, e))
+    ]
+
+
+def cleanup_task(task_dir):
+    targets = {
+        "edit.blend":    os.path.join(task_dir, "edit.blend"),
+        "renders/edit":  os.path.join(task_dir, "renders", "edit"),
+        "metadata.json": os.path.join(task_dir, "metadata.json"),
+    }
+
+    blend1_files = [f for f in os.listdir(task_dir) if f.endswith(".blend1")]
+    for f in blend1_files:
+        os.remove(os.path.join(task_dir, f))
+        print(f"  deleted {f}")
+
+    if not blend1_files and not any(os.path.exists(p) for p in targets.values()):
+        return False
+
+    prev_dir = os.path.join(task_dir, "prev")
+    os.makedirs(prev_dir, exist_ok=True)
+
+    for name, src in targets.items():
+        if not os.path.exists(src):
+            continue
+        dst = os.path.join(prev_dir, os.path.basename(src))
+        if os.path.exists(dst):
+            shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
+        shutil.move(src, dst)
+        print(f"  {name} -> prev/")
+
+    return True
+
+
+def main(args):
+    task_dirs = get_task_dirs()
+
+    if args.task_name:
+        task_dirs = [t for t in task_dirs if os.path.basename(t) == args.task_name]
+        if not task_dirs:
+            print(f"ERROR: Task '{args.task_name}' not found.")
+            return
+
+    cleaned = 0
+    for task_dir in task_dirs:
+        task_name = os.path.basename(task_dir)
+        if cleanup_task(task_dir):
+            print(f"[{task_name}] Cleaned up.")
+            cleaned += 1
+
+    print(f"\nDone. {cleaned} task(s) cleaned up.")
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--task_name", type=str, default=None,
+                        help="Clean up a single task. If omitted, cleans all tasks.")
+    args = parser.parse_args()
+
+    main(args)
