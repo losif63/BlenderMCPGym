@@ -23,7 +23,11 @@ def main(args):
     goal_renders_dir = os.path.join(task_dir, "renders", "goal")
     edit_renders_dir = os.path.join(task_dir, "renders", "edit")
     description_path = os.path.join(task_dir, "description.txt")
+    edit_file = os.path.join(task_dir, f"edit_{args.task_name}.blend")
 
+    if not os.path.exists(edit_file):
+        print(f"ERROR: {edit_file} does not exist. Run single_task.py first.")
+        return
     if not os.path.exists(edit_renders_dir):
         print(f"ERROR: {edit_renders_dir} does not exist. Run single_task.py first.")
         return

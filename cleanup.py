@@ -16,11 +16,12 @@ def get_task_dirs():
     ]
 
 
-def cleanup_task(task_dir):
+def cleanup_task(task_dir, force_delete=False):
+    task_name = os.path.basename(task_dir)
     targets = {
-        "edit.blend":    os.path.join(task_dir, "edit.blend"),
-        "renders/edit":  os.path.join(task_dir, "renders", "edit"),
-        "metadata.json": os.path.join(task_dir, "metadata.json"),
+        f"edit_{task_name}.blend": os.path.join(task_dir, f"edit_{task_name}.blend"),
+        "renders/edit":            os.path.join(task_dir, "renders", "edit"),
+        "metadata.json":           os.path.join(task_dir, "metadata.json"),
     }
 
     blend1_files = [f for f in os.listdir(task_dir) if f.endswith(".blend1")]
@@ -28,10 +29,15 @@ def cleanup_task(task_dir):
         os.remove(os.path.join(task_dir, f))
         print(f"  deleted {f}")
 
+    prev_dir = os.path.join(task_dir, "prev")
+
+    if force_delete and os.path.exists(prev_dir):
+        shutil.rmtree(prev_dir)
+        print(f"  deleted prev/")
+
     if not blend1_files and not any(os.path.exists(p) for p in targets.values()):
         return False
 
-    prev_dir = os.path.join(task_dir, "prev")
     os.makedirs(prev_dir, exist_ok=True)
 
     for name, src in targets.items():
@@ -58,7 +64,7 @@ def main(args):
     cleaned = 0
     for task_dir in task_dirs:
         task_name = os.path.basename(task_dir)
-        if cleanup_task(task_dir):
+        if cleanup_task(task_dir, force_delete=args.force_delete):
             print(f"[{task_name}] Cleaned up.")
             cleaned += 1
 
@@ -69,6 +75,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task_name", type=str, default=None,
                         help="Clean up a single task. If omitted, cleans all tasks.")
+    parser.add_argument("--force-delete", action="store_true",
+                        help="Also delete the prev/ subdirectory.")
     args = parser.parse_args()
 
     main(args)

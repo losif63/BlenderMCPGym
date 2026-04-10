@@ -67,8 +67,9 @@ def build_prompt(instruction, start_renders, goal_renders):
 
 
 def run_task(task_dir, port=BLENDERMCP_PORT):
+    task_name = os.path.basename(task_dir)
     blend_file = f"{task_dir}/blender_file.blend"
-    edit_file = f"{task_dir}/edit.blend"
+    edit_file = f"{task_dir}/edit_{task_name}.blend"
     start_renders = f"{task_dir}/renders/start"
     goal_renders = f"{task_dir}/renders/goal"
 
