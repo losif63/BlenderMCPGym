@@ -1,7 +1,5 @@
 from argparse import ArgumentParser
-import json
 import os
-import time
 from multiprocessing import Pool
 
 from single_task import run_task
@@ -28,22 +26,11 @@ def run_task_with_logging(args):
     task_name = os.path.basename(task_dir)
     print(f"\n[{task_name}] Starting on port {port}...")
     try:
-        start_time = time.time()
         run_task(task_dir, port=port)
-        duration = time.time() - start_time
     except Exception as e:
         print(f"[{task_name}] ERROR: {e}")
         return
-
-    metadata_path = os.path.join(task_dir, "metadata.json")
-    metadata = {}
-    if os.path.exists(metadata_path):
-        with open(metadata_path, "r") as f:
-            metadata = json.load(f)
-    metadata["duration_seconds"] = round(duration, 2)
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-    print(f"[{task_name}] Done in {duration:.2f}s")
+    print(f"[{task_name}] Done.")
 
 
 def main(args):

@@ -1,7 +1,5 @@
 from argparse import ArgumentParser
-import json
 import os
-import time
 
 from single_task import run_task
 
@@ -32,22 +30,10 @@ def main(args):
         print(f"Task: {task_name}")
         print(f"{'='*50}")
         try:
-            start_time = time.time()
             run_task(task_dir)
-            duration = time.time() - start_time
         except Exception as e:
             print(f"ERROR on {task_name}: {e}")
             continue
-
-        metadata_path = os.path.join(task_dir, "metadata.json")
-        metadata = {}
-        if os.path.exists(metadata_path):
-            with open(metadata_path, "r") as f:
-                metadata = json.load(f)
-        metadata["duration_seconds"] = round(duration, 2)
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        print(f"Logged duration: {duration:.2f}s -> {metadata_path}")
 
     print("\nAll tasks complete.")
 

@@ -67,6 +67,7 @@ def build_prompt(instruction, start_renders, goal_renders):
 
 
 def run_task(task_dir, port=BLENDERMCP_PORT):
+    start_time = time.time()
     task_name = os.path.basename(task_dir)
     blend_file = f"{task_dir}/blender_file.blend"
     edit_file = f"{task_dir}/edit_{task_name}.blend"
@@ -113,11 +114,21 @@ def run_task(task_dir, port=BLENDERMCP_PORT):
     edit_render_script = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data/edit_render_script.py")
     subprocess.run([
         "/Applications/Blender.app/Contents/MacOS/blender",
-        "--background", f"{task_dir}/edit.blend",
+        "--background", edit_file,
         "--python", edit_render_script,
         "--", edit_renders_dir,
     ], check=True)
     print(f"[{task_dir}] Renders saved to {edit_renders_dir}")
+
+    metadata_path = f"{task_dir}/metadata.json"
+    metadata = {}
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+    metadata["duration_seconds"] = round(time.time() - start_time, 2)
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+    print(f"[{task_dir}] Logged duration: {metadata['duration_seconds']}s")
 
 
 def main(args):
