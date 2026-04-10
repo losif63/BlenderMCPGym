@@ -106,6 +106,18 @@ def run_task(task_dir, port=BLENDERMCP_PORT):
     print(f"[{task_dir}] Saved. Closing Blender...")
     blender_proc.terminate()
 
+    edit_renders_dir = f"{task_dir}/renders/edit"
+    os.makedirs(edit_renders_dir, exist_ok=True)
+    print(f"[{task_dir}] Rendering edited scene...")
+    edit_render_script = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data/edit_render_script.py")
+    subprocess.run([
+        "/Applications/Blender.app/Contents/MacOS/blender",
+        "--background", f"{task_dir}/edit.blend",
+        "--python", edit_render_script,
+        "--", edit_renders_dir,
+    ], check=True)
+    print(f"[{task_dir}] Renders saved to {edit_renders_dir}")
+
 
 def main(args):
     task_dir = os.path.expanduser(f"~/Desktop/Research/BlenderMCPGym/bench_data/{args.task_name}")
