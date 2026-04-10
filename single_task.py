@@ -66,7 +66,7 @@ def build_prompt(instruction, start_renders, goal_renders):
     )
 
 
-def run_task(task_dir):
+def run_task(task_dir, port=BLENDERMCP_PORT):
     blend_file = f"{task_dir}/blender_file.blend"
     edit_file = f"{task_dir}/edit.blend"
     start_renders = f"{task_dir}/renders/start"
@@ -79,29 +79,31 @@ def run_task(task_dir):
 
     prompt = build_prompt(instruction, start_renders, goal_renders)
 
+    start_script = f"{task_dir}/start.py"
     shutil.copy2(blend_file, edit_file)
     blender_proc = subprocess.Popen([
         "/Applications/Blender.app/Contents/MacOS/blender",
         edit_file,
+        "--python", start_script,
         "--python-expr",
-        "import bpy; bpy.app.timers.register(lambda: bpy.ops.blendermcp.start_server(), first_interval=1.0)"
+        f"import bpy; bpy.context.scene.blendermcp_port = {port}; bpy.app.timers.register(lambda: bpy.ops.blendermcp.start_server(), first_interval=1.0)"
     ])
 
-    print(f"Waiting for BlenderMCP server on port {BLENDERMCP_PORT}...")
-    if not wait_for_blendermcp():
-        print("ERROR: BlenderMCP server did not start within timeout.")
+    print(f"[{task_dir}] Waiting for BlenderMCP server on port {port}...")
+    if not wait_for_blendermcp(port=port):
+        print(f"[{task_dir}] ERROR: BlenderMCP server did not start within timeout.")
         blender_proc.terminate()
         return
 
-    print("BlenderMCP server is ready. Launching Claude Code...")
+    print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code...")
     subprocess.run(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
         cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym")
     )
 
-    print("Claude Code finished. Saving Blender file...")
-    save_blender_file()
-    print("Saved. Closing Blender...")
+    print(f"[{task_dir}] Claude Code finished. Saving Blender file...")
+    save_blender_file(port=port)
+    print(f"[{task_dir}] Saved. Closing Blender...")
     blender_proc.terminate()
 
 
