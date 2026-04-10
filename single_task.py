@@ -66,8 +66,7 @@ def build_prompt(instruction, start_renders, goal_renders):
     )
 
 
-def main(args):
-    task_dir = os.path.expanduser(f"~/Desktop/Research/BlenderMCPGym/bench_data/{args.task_name}")
+def run_task(task_dir):
     blend_file = f"{task_dir}/blender_file.blend"
     edit_file = f"{task_dir}/edit.blend"
     start_renders = f"{task_dir}/renders/start"
@@ -104,6 +103,11 @@ def main(args):
     save_blender_file()
     print("Saved. Closing Blender...")
     blender_proc.terminate()
+
+
+def main(args):
+    task_dir = os.path.expanduser(f"~/Desktop/Research/BlenderMCPGym/bench_data/{args.task_name}")
+    run_task(task_dir)
 
 
 if __name__ == '__main__':
