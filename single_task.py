@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import json
 import os
 import shutil
 import socket
@@ -13,7 +14,7 @@ SYSTEM_PROMPT = (
     "describing the intended edit, and rendered images of the target scene. "
     "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
     "so that the scene matches the target rendered images as closely as possible. "
-    "When you are done, do not close Blender or stop the server."
+    "When you are done with all edits, stop. Do not close Blender or stop the server."
 )
 
 
@@ -28,7 +29,16 @@ def wait_for_blendermcp(port=BLENDERMCP_PORT, timeout=60, interval=1.0):
     return False
 
 
-def build_prompt(task_dir, instruction, start_renders, goal_renders):
+def save_blender_file(port=BLENDERMCP_PORT):
+    command = json.dumps({"type": "execute_code", "params": {"code": "bpy.ops.wm.save_mainfile()"}})
+    with socket.create_connection(("localhost", port), timeout=10) as s:
+        s.sendall(command.encode("utf-8"))
+        response = json.loads(s.recv(8192).decode("utf-8"))
+    if response.get("status") != "success":
+        print(f"WARNING: save_mainfile returned unexpected response: {response}")
+
+
+def build_prompt(instruction, start_renders, goal_renders):
     start_images = sorted([
         os.path.join(start_renders, f)
         for f in os.listdir(start_renders)
@@ -68,7 +78,7 @@ def main(args):
     ind = content.find("INSTRUCTION:")
     instruction = content[ind:].strip()
 
-    prompt = build_prompt(task_dir, instruction, start_renders, goal_renders)
+    prompt = build_prompt(instruction, start_renders, goal_renders)
 
     shutil.copy2(blend_file, edit_file)
     blender_proc = subprocess.Popen([
@@ -90,7 +100,9 @@ def main(args):
         cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym")
     )
 
-    print("Claude Code finished. Closing Blender...")
+    print("Claude Code finished. Saving Blender file...")
+    save_blender_file()
+    print("Saved. Closing Blender...")
     blender_proc.terminate()
 
 
