@@ -74,7 +74,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT):
     start_renders = f"{task_dir}/renders/start"
     goal_renders = f"{task_dir}/renders/goal"
 
-    with open(f"{task_dir}/description.txt", "r") as f:
+    with open(f"{task_dir}/detailed_instruction.txt", "r") as f:
         content = f.read()
     ind = content.find("INSTRUCTION:")
     instruction = content[ind:].strip()

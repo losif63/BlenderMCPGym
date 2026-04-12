@@ -26,7 +26,7 @@ from PIL import Image
 TASK_TYPES = ['blendshape', 'geometry', 'lighting', 'material', 'placement']
 
 PROMPT = """
-You are analyzing a 3D scene editing task in Blender. I will show you rendered images of a 
+You are analyzing a 3D scene editing task in Blender. I will show you rendered images of a
 scene BEFORE and AFTER a single programmatic edit was applied.
 
 The BEFORE images are the starting scene rendered from one or more camera angles.
@@ -42,7 +42,29 @@ Be concise and specific. Write 1-3 sentences. Do not describe what stayed the sa
 Next, write a concise instruction (1-3 sentences) that tells an AI agent exactly how to edit the
 BEFORE scene to produce the AFTER scene, based on your observations. Use imperative language (e.g. "Move...", "Change...",
 "Increase...", "Apply..."). Be specific about what to modify and in which direction or to what
-value where apparent. Do not describe what stays the same. Begin your instruction with the delimiter INSTRUCTION: 
+value where apparent. Do not describe what stays the same. Begin your instruction with the delimiter INSTRUCTION:
+"""
+
+DETAILED_PROMPT = """
+You are an expert 3D scene analyst. I will show you rendered images of a Blender scene BEFORE
+and AFTER a single programmatic edit was applied, from one or more camera angles.
+
+Your job is to scrutinize every minor detail and find every little difference between the two
+scenes — no matter how subtle. Examine colors, shading, shadows, reflections, object positions,
+rotations, scales, geometry, textures, materials, lighting intensity and color, and any other
+visual properties you can observe. Compare the images pixel by pixel in your mind.
+
+Then write an extremely detailed instruction (at minimum one full paragraph) that tells an AI
+agent exactly how to reproduce the change in Blender. The instruction must:
+- Identify the exact object(s) or property/properties affected
+- Describe every observable difference with as much numerical or directional specificity as possible
+  (e.g. approximate axis of movement, relative scale change, hue shift, brightness delta)
+- Note subtle secondary effects such as changes in shadows, reflections, or indirect lighting
+- Use imperative language (e.g. "Move...", "Set...", "Increase...", "Apply...")
+- Be thorough enough that an agent with no prior knowledge of the scene could reproduce the edit
+  precisely from your description alone
+
+Do not mention what stayed the same. Begin your instruction with the delimiter INSTRUCTION:
 """
 
 
@@ -88,7 +110,7 @@ def load_images_as_pil(render_dir: Path) -> list:
     return images
 
 
-def describe_instance(model, instance_dir: Path) -> str:
+def describe_instance(model, instance_dir: Path) -> tuple[str, str]:
     start_dir = instance_dir / "renders" / "start"
     goal_dir = instance_dir / "renders" / "goal"
 
@@ -100,15 +122,16 @@ def describe_instance(model, instance_dir: Path) -> str:
     if not goal_images:
         raise FileNotFoundError(f"No goal renders found in {goal_dir}")
 
-    # Build the content list: label + images for before, then after
-    content = [PROMPT]
-    content.append("BEFORE (start scene):")
-    content.extend(start_images)
-    content.append("AFTER (goal scene):")
-    content.extend(goal_images)
+    # Build shared image block: label + images for before, then after
+    image_block = ["BEFORE (start scene):"] + start_images + ["AFTER (goal scene):"] + goal_images
 
-    response = model.generate_content(content)
-    return response.text.strip()
+    response = model.generate_content([PROMPT] + image_block)
+    description = response.text.strip()
+
+    detailed_response = model.generate_content([DETAILED_PROMPT] + image_block)
+    detailed_instruction = detailed_response.text.strip()
+
+    return description, detailed_instruction
 
 
 def main():
@@ -143,18 +166,21 @@ def main():
 
     for i, instance_dir in enumerate(instances):
         desc_path = instance_dir / "description.txt"
+        detailed_path = instance_dir / "detailed_instruction.txt"
 
-        if desc_path.exists() and not args.overwrite:
+        if desc_path.exists() and detailed_path.exists() and not args.overwrite:
             print(f"[{i+1}/{len(instances)}] {instance_dir.name}: skipping (already exists)")
             skipped += 1
             continue
 
         print(f"[{i+1}/{len(instances)}] {instance_dir.name}: generating...", end=" ", flush=True)
         try:
-            description = describe_instance(model, instance_dir)
+            description, detailed_instruction = describe_instance(model, instance_dir)
             desc_path.write_text(description + "\n")
+            detailed_path.write_text(detailed_instruction + "\n")
             print(f"done.")
             print(f"  → {description}")
+            print(f"  → (detailed) {detailed_instruction[:120]}...")
             success += 1
         except Exception as e:
             print(f"FAILED: {e}")
