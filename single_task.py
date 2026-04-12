@@ -100,7 +100,8 @@ def run_task(task_dir, port=BLENDERMCP_PORT):
     print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code...")
     subprocess.run(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
-        cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym")
+        cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym"),
+        env={**os.environ, "BLENDER_MCP_LOG_DIR": task_dir},
     )
 
     print(f"[{task_dir}] Claude Code finished. Saving Blender file...")
