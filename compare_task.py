@@ -19,17 +19,18 @@ def load_images(directory):
 
 def main(args):
     task_dir = os.path.join(BENCH_DATA_DIR, args.task_name)
+    ver_tag = f"ver{args.version}"
     start_renders_dir = os.path.join(task_dir, "renders", "start")
     goal_renders_dir = os.path.join(task_dir, "renders", "goal")
-    edit_renders_dir = os.path.join(task_dir, "renders", "edit")
-    description_path = os.path.join(task_dir, "description.txt")
-    edit_file = os.path.join(task_dir, f"edit_{args.task_name}.blend")
+    edit_renders_dir = os.path.join(task_dir, "renders", f"edit_{ver_tag}")
+    description_path = os.path.join(task_dir, "detailed_instruction.txt")
+    edit_file = os.path.join(task_dir, f"edit_{args.task_name}_{ver_tag}.blend")
 
     if not os.path.exists(edit_file):
-        print(f"ERROR: {edit_file} does not exist. Run single_task.py first.")
+        print(f"ERROR: {edit_file} does not exist. Run single_task.py --version {args.version} first.")
         return
     if not os.path.exists(edit_renders_dir):
-        print(f"ERROR: {edit_renders_dir} does not exist. Run single_task.py first.")
+        print(f"ERROR: {edit_renders_dir} does not exist. Run single_task.py --version {args.version} first.")
         return
 
     with open(description_path, "r") as f:
@@ -68,7 +69,7 @@ def main(args):
 
     comparisons_dir = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/comparisons")
     os.makedirs(comparisons_dir, exist_ok=True)
-    output_path = os.path.join(comparisons_dir, f"{args.task_name}.png")
+    output_path = os.path.join(comparisons_dir, f"{args.task_name}_{ver_tag}.png")
     plt.savefig(output_path, bbox_inches="tight")
     print(f"Saved comparison to {output_path}")
 
@@ -78,6 +79,8 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task_name", type=str, required=True)
+    parser.add_argument("--version", type=int, default=1, choices=[1, 2],
+                        help="Experiment version to compare (default: 1)")
     args = parser.parse_args()
 
     main(args)

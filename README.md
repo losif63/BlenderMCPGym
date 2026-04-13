@@ -40,7 +40,14 @@ python generate_descriptions.py --task placement geometry
 python generate_descriptions.py --overwrite
 ```
 
-Sends start/goal render images to the Gemini API and writes a `description.txt` for each task. Requires a Gemini API key (pass via `--api_key` or set in the environment).
+Sends start/goal render images to the Gemini API and writes two description files per task:
+
+| File | Description |
+|---|---|
+| `description.txt` | Concise 1–3 sentence instruction |
+| `detailed_instruction.txt` | Detailed paragraph-length instruction scrutinizing every visual difference |
+
+`single_task.py` uses `detailed_instruction.txt`. Requires a Gemini API key (pass via `--api_key` or set in the environment).
 
 ---
 
@@ -49,16 +56,39 @@ Sends start/goal render images to the Gemini API and writes a `description.txt` 
 ### Single task
 
 ```bash
+# Version 1 (default) — provides start.py as context
 python single_task.py --task_name blendshape1
+python single_task.py --task_name blendshape1 --version 1
+
+# Version 2 — no start.py context
+python single_task.py --task_name blendshape1 --version 2
 ```
 
+Two experiment versions are supported, controlled by `--version` (default: `1`):
+
+| Version | start.py provided | Agent instruction |
+|---|---|---|
+| **1** (default) | Yes | Use only the variables, objects, and methods defined in `start.py` |
+| **2** | No | Free to use any BlenderMCP approach |
+
+This mirrors the original paper's intention: version 1 gives the agent a structured API (the variables and functions already set up in the scene), while version 2 tests the agent's ability to edit the scene from scratch with no scaffolding.
+
 For one task, this script:
-1. Copies `blender_file.blend` → `edit_{task_name}.blend`
+1. Copies `blender_file.blend` → `edit_{task_name}_ver{N}.blend`
 2. Opens Blender with the edit file, runs `start.py` to initialize the scene, and starts the BlenderMCP server
 3. Waits for BlenderMCP to be ready on port 9876
-4. Launches Claude Code with a prompt containing the start renders, instruction, and goal renders
+4. Launches Claude Code with a prompt containing the start renders, detailed instruction, goal renders, and (version 1 only) the `start.py` source code
 5. Saves the edited file via BlenderMCP, closes Blender
-6. Renders the edited scene to `renders/edit/`
+6. Renders the edited scene to `renders/edit_ver{N}/`
+
+Per-version outputs under each task directory:
+
+| Path | Description |
+|---|---|
+| `edit_{task_name}_ver{N}.blend` | Edited Blender file for version N |
+| `renders/edit_ver{N}/` | Rendered images of the edited scene for version N |
+| `ver{N}/` | BlenderMCP interaction logs for version N |
+| `metadata_ver{N}.json` | Timing and version metadata for version N |
 
 ### Full benchmark (sequential)
 

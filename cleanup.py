@@ -18,11 +18,13 @@ def get_task_dirs():
 
 def cleanup_task(task_dir, force_delete=False):
     task_name = os.path.basename(task_dir)
-    targets = {
-        f"edit_{task_name}.blend": os.path.join(task_dir, f"edit_{task_name}.blend"),
-        "renders/edit":            os.path.join(task_dir, "renders", "edit"),
-        "metadata.json":           os.path.join(task_dir, "metadata.json"),
-    }
+    targets = {}
+    for ver in (1, 2):
+        ver_tag = f"ver{ver}"
+        targets[f"edit_{task_name}_{ver_tag}.blend"] = os.path.join(task_dir, f"edit_{task_name}_{ver_tag}.blend")
+        targets[f"renders/edit_{ver_tag}"]           = os.path.join(task_dir, "renders", f"edit_{ver_tag}")
+        targets[f"metadata_{ver_tag}.json"]          = os.path.join(task_dir, f"metadata_{ver_tag}.json")
+        targets[ver_tag]                             = os.path.join(task_dir, ver_tag)
 
     blend1_files = [f for f in os.listdir(task_dir) if f.endswith(".blend1")]
     for f in blend1_files:

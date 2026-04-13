@@ -143,7 +143,7 @@ def main():
                         help="Overwrite existing description.txt files")
     parser.add_argument("--bench_data", type=str, default="bench_data",
                         help="Path to bench_data directory")
-    parser.add_argument("--model", type=str, default="gemini-3.1-flash-lite-preview",
+    parser.add_argument("--model", type=str, default="models/gemma-4-31b-it",
                         help="Gemini model to use")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Seconds to wait between API calls (avoid rate limits)")

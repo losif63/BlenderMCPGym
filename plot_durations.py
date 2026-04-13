@@ -1,5 +1,6 @@
 import json
 import os
+from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
 
@@ -9,15 +10,16 @@ SKIP_ENTRIES = {"blender_files"}
 TASK_TYPES = ["blendshape", "geometry", "lighting", "material", "placement"]
 
 
-def collect_durations():
+def collect_durations(version):
     durations = {t: [] for t in TASK_TYPES}
+    metadata_filename = f"metadata_ver{version}.json"
     for entry in sorted(os.listdir(BENCH_DATA_DIR)):
         if entry in SKIP_ENTRIES:
             continue
         task_dir = os.path.join(BENCH_DATA_DIR, entry)
         if not os.path.isdir(task_dir):
             continue
-        metadata_path = os.path.join(task_dir, "metadata.json")
+        metadata_path = os.path.join(task_dir, metadata_filename)
         if not os.path.exists(metadata_path):
             continue
         with open(metadata_path, "r") as f:
@@ -33,7 +35,12 @@ def collect_durations():
 
 
 def main():
-    durations = collect_durations()
+    parser = ArgumentParser()
+    parser.add_argument("--version", type=int, default=1, choices=[1, 2],
+                        help="Experiment version to plot durations for (default: 1)")
+    args = parser.parse_args()
+
+    durations = collect_durations(args.version)
 
     all_durations = [d for vals in durations.values() for d in vals]
     if not all_durations:
