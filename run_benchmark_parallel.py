@@ -20,10 +20,25 @@ def get_task_dirs():
     ]
 
 
+def already_done(task_dir, version):
+    task_name = os.path.basename(task_dir)
+    ver_tag = f"ver{version}"
+    edit_file = os.path.join(task_dir, f"edit_{task_name}_{ver_tag}.blend")
+    edit_renders = os.path.join(task_dir, "renders", f"edit_{ver_tag}")
+    has_renders = os.path.isdir(edit_renders) and any(
+        f.lower().endswith((".png", ".jpg", ".jpeg"))
+        for f in os.listdir(edit_renders)
+    )
+    return os.path.isfile(edit_file) and has_renders
+
+
 def run_task_with_logging(args):
     task_index, task_dir, version = args
-    port = BASE_PORT + (task_index % MAX_WORKERS)
     task_name = os.path.basename(task_dir)
+    if already_done(task_dir, version):
+        print(f"[{task_name}] Skipping — edit file and renders already exist.")
+        return
+    port = BASE_PORT + (task_index % MAX_WORKERS)
     print(f"\n[{task_name}] Starting on port {port} (version {version})...")
     try:
         run_task(task_dir, port=port, version=version)

@@ -1,13 +1,16 @@
 from argparse import ArgumentParser
+import glob
 import json
 import os
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 
 BLENDERMCP_PORT = 9876
+MAX_TOOL_CALLS = 20
 
 # Version 1: agent is given start.py and told to use only its variables/methods.
 SYSTEM_PROMPT_V1 = (
@@ -44,6 +47,28 @@ def wait_for_blendermcp(port=BLENDERMCP_PORT, timeout=60, interval=1.0):
         except OSError:
             time.sleep(interval)
     return False
+
+
+def count_tool_calls(log_dir):
+    """Count total lines across all tool_calls.jsonl files under log_dir."""
+    total = 0
+    for path in glob.glob(os.path.join(log_dir, "*", "tool_calls.jsonl")):
+        try:
+            with open(path, "r") as f:
+                total += sum(1 for _ in f)
+        except OSError:
+            pass
+    return total
+
+
+def monitor_tool_calls(log_dir, proc, max_calls, check_interval=2.0):
+    """Watch tool_calls.jsonl and terminate proc when tool call count exceeds max_calls."""
+    while proc.poll() is None:
+        if count_tool_calls(log_dir) >= max_calls:
+            print(f"  [watchdog] Tool call limit ({max_calls}) reached — terminating claude.")
+            proc.terminate()
+            return
+        time.sleep(check_interval)
 
 
 def save_blender_file(port=BLENDERMCP_PORT):
@@ -134,12 +159,20 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
         return
 
     os.makedirs(log_dir, exist_ok=True)
-    print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version})...")
-    subprocess.run(
+    print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version}, limit {MAX_TOOL_CALLS} tool calls)...")
+    claude_proc = subprocess.Popen(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
         cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym"),
         env={**os.environ, "BLENDER_MCP_LOG_DIR": log_dir},
     )
+    watchdog = threading.Thread(
+        target=monitor_tool_calls,
+        args=(log_dir, claude_proc, MAX_TOOL_CALLS),
+        daemon=True,
+    )
+    watchdog.start()
+    claude_proc.wait()
+    watchdog.join(timeout=5)
 
     print(f"[{task_dir}] Claude Code finished. Saving Blender file...")
     save_blender_file(port=port)

@@ -53,8 +53,8 @@ def main(args):
         e for e in BENCH_DATA_DIR.iterdir()
         if e.is_dir()
         and e.name not in SKIP_ENTRIES
-        and re.match(r'^([a-z]+)\d+$', e.name)
-        and re.match(r'^([a-z]+)', e.name).group(1) in task_filter
+        and (m := re.match(r'^([a-z]+)\d+$', e.name)) is not None
+        and m.group(1) in task_filter
     )
 
     if not task_dirs:
