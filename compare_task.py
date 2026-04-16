@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 
-BENCH_DATA_DIR = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data")
+BENCH_DATA_DIR = f"{os.getcwd()}/bench_data"
 SKIP_ENTRIES = {"blender_files"}
 TASK_TYPES = ["blendshape", "geometry", "lighting", "material", "placement"]
 

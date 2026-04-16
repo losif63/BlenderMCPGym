@@ -22,7 +22,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 
-BENCH_DATA_DIR = Path(os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data"))
+BENCH_DATA_DIR = f"{os.getcwd()}/bench_data"
 SKIP_ENTRIES = {"blender_files"}
 TASK_TYPES = ["blendshape", "geometry", "lighting", "material", "placement"]
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}

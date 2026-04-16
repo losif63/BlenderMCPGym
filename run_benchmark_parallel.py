@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from single_task import run_task
 
 
-BENCH_DATA_DIR = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data")
+BENCH_DATA_DIR = f"{os.getcwd()}/bench_data"
 SKIP_ENTRIES = {"blender_files"}
 BASE_PORT = 9876
 MAX_WORKERS = 5
