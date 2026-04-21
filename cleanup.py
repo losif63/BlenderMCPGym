@@ -2,8 +2,7 @@ from argparse import ArgumentParser
 import os
 import shutil
 
-
-BENCH_DATA_DIR = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data")
+BENCH_DATA_DIR = f"{os.getcwd()}/bench_data"
 SKIP_ENTRIES = {"blender_files"}
 
 
