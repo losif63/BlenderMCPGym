@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-import glob
 import json
 import os
 import shutil
@@ -10,6 +9,7 @@ import time
 
 
 BLENDERMCP_PORT = 9876
+BLENDER_EXE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
 MAX_TOOL_CALLS = 20
 
 # Version 1: agent is given start.py and told to use only its variables/methods.
@@ -49,22 +49,48 @@ def wait_for_blendermcp(port=BLENDERMCP_PORT, timeout=60, interval=1.0):
     return False
 
 
-def count_tool_calls(log_dir):
-    """Count total lines across all tool_calls.jsonl files under log_dir."""
-    total = 0
-    for path in glob.glob(os.path.join(log_dir, "*", "tool_calls.jsonl")):
-        try:
-            with open(path, "r") as f:
-                total += sum(1 for _ in f)
-        except OSError:
-            pass
-    return total
+def get_session_dirs(log_dir):
+    """Return the set of session subdirectory names currently under log_dir."""
+    try:
+        return {
+            d for d in os.listdir(log_dir)
+            if os.path.isdir(os.path.join(log_dir, d))
+        }
+    except OSError:
+        return set()
 
 
-def monitor_tool_calls(log_dir, proc, max_calls, check_interval=2.0):
-    """Watch tool_calls.jsonl and terminate proc when tool call count exceeds max_calls."""
+def count_tool_calls_in_session(session_dir):
+    """Count lines in the tool_calls.jsonl file of a single session directory."""
+    path = os.path.join(session_dir, "tool_calls.jsonl")
+    try:
+        with open(path, "r") as f:
+            return sum(1 for _ in f)
+    except OSError:
+        return 0
+
+
+def monitor_tool_calls(log_dir, existing_sessions, proc, max_calls, check_interval=2.0):
+    """
+    Wait for a new session directory to appear under log_dir (one not in
+    existing_sessions), then watch only that session's tool_calls.jsonl and
+    terminate proc once the line count reaches max_calls.
+    """
+    # Wait for the new session dir to be created by Claude Code
+    new_session_dir = None
+    while proc.poll() is None and new_session_dir is None:
+        current = get_session_dirs(log_dir)
+        new_dirs = current - existing_sessions
+        if new_dirs:
+            new_session_dir = os.path.join(log_dir, sorted(new_dirs)[-1])
+            print(f"  [watchdog] Monitoring session: {new_session_dir}")
+        time.sleep(check_interval)
+
+    if new_session_dir is None:
+        return  # proc already finished before a new session appeared
+
     while proc.poll() is None:
-        if count_tool_calls(log_dir) >= max_calls:
+        if count_tool_calls_in_session(new_session_dir) >= max_calls:
             print(f"  [watchdog] Tool call limit ({max_calls}) reached — terminating claude.")
             proc.terminate()
             return
@@ -145,7 +171,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
 
     shutil.copy2(blend_file, edit_file)
     blender_proc = subprocess.Popen([
-        "/Applications/Blender.app/Contents/MacOS/blender",
+        BLENDER_EXE,
         edit_file,
         "--python", start_script,
         "--python-expr",
@@ -159,6 +185,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
         return
 
     os.makedirs(log_dir, exist_ok=True)
+    existing_sessions = get_session_dirs(log_dir)
     print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version}, limit {MAX_TOOL_CALLS} tool calls)...")
     claude_proc = subprocess.Popen(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
@@ -167,7 +194,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
     )
     watchdog = threading.Thread(
         target=monitor_tool_calls,
-        args=(log_dir, claude_proc, MAX_TOOL_CALLS),
+        args=(log_dir, existing_sessions, claude_proc, MAX_TOOL_CALLS),
         daemon=True,
     )
     watchdog.start()
@@ -184,7 +211,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
     print(f"[{task_dir}] Rendering edited scene...")
     edit_render_script = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/bench_data/edit_render_script.py")
     subprocess.run([
-        "/Applications/Blender.app/Contents/MacOS/blender",
+        BLENDER_EXE,
         "--background", edit_file,
         "--python", edit_render_script,
         "--", edit_renders_dir,
