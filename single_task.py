@@ -220,14 +220,11 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
 
     os.makedirs(log_dir, exist_ok=True)
     existing_sessions = get_session_dirs(log_dir)
-    run_id = time.strftime("%Y%m%d_%H%M%S")
-    render_dir = os.path.join(log_dir, f"temp_renders_{run_id}")
-    os.makedirs(render_dir, exist_ok=True)
     print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version}, limit {MAX_TOOL_CALLS} tool calls)...")
     claude_proc = subprocess.Popen(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
         cwd=os.path.expanduser("~/Desktop/Research/BlenderMCPGym"),
-        env={**os.environ, "BLENDER_MCP_LOG_DIR": log_dir, "BLENDER_RENDER_DIR": render_dir},
+        env={**os.environ, "BLENDER_MCP_LOG_DIR": log_dir},
     )
     watchdog = threading.Thread(
         target=monitor_tool_calls,
