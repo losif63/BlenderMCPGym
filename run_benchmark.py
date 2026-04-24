@@ -45,7 +45,7 @@ def main(args):
         print(f"Task: {task_name}")
         print(f"{'='*50}")
         try:
-            run_task(task_dir, version=args.version)
+            run_task(task_dir, version=args.version, virtual_display=args.virtual)
         except Exception as e:
             print(f"ERROR on {task_name}: {e}")
             continue
@@ -55,6 +55,8 @@ def main(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    parser.add_argument('--virtual', action='store_true',
+                        help="Set DISPLAY=:99 when launching Blender (for headless servers with a virtual display).")
     parser.add_argument('--task_type', type=str, default=None,
                         help="Filter by task type prefix, e.g. 'blendshape', 'material', 'placement'")
     parser.add_argument('--version', type=int, default=1, choices=[1, 2, 3],
