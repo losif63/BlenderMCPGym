@@ -10,7 +10,7 @@ import time
 
 BLENDERMCP_PORT = 9876
 BLENDER_EXE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
-MAX_TOOL_CALLS = 20
+MAX_TOOL_CALLS = 50
 
 # Version 1: agent is given start.py and told to use only its variables/methods.
 SYSTEM_PROMPT_V1 = (
@@ -34,6 +34,20 @@ SYSTEM_PROMPT_V2 = (
     "describing the intended edit, and rendered images of the target scene. "
     "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
     "so that the scene matches the target rendered images as closely as possible. "
+    "When you are done with all edits, stop. Do not close Blender or stop the server."
+)
+
+# Version 3: agent receives start.py and rendered images but no textual instruction.
+SYSTEM_PROMPT_V3 = (
+    "Your task is to edit a Blender scene using BlenderMCP tools. "
+    "You will be given the Blender Python initialization script (start.py) used to set up "
+    "the scene, rendered images of the current scene, and rendered images of the target scene. "
+    "Study the start.py code to understand the scene's objects, variables, and methods, then "
+    "use the BlenderMCP tools to modify the scene so that its rendered result matches the "
+    "target images as closely as possible. "
+    "IMPORTANT: Make your edits by building on the existing variables and methods defined in "
+    "start.py only — do not create new objects or use approaches inconsistent with how the "
+    "scene was initialized. "
     "When you are done with all edits, stop. Do not close Blender or stop the server."
 )
 
@@ -121,27 +135,47 @@ def build_prompt(instruction, start_renders, goal_renders, version=1, start_code
     start_paths = "\n".join(f"  - {p}" for p in start_images)
     goal_paths = "\n".join(f"  - {p}" for p in goal_images)
 
-    system_prompt = SYSTEM_PROMPT_V1 if version == 1 else SYSTEM_PROMPT_V2
+    if version == 1:
+        system_prompt = SYSTEM_PROMPT_V1
+    elif version == 3:
+        system_prompt = SYSTEM_PROMPT_V3
+    else:
+        system_prompt = SYSTEM_PROMPT_V2
 
-    prompt = (
-        f"{system_prompt}\n\n"
-        f"## Starting Scene\n"
-        f"The following are rendered images of the current Blender scene. Read each file before proceeding:\n"
-        f"{start_paths}\n\n"
-        f"## Instruction\n"
-        f"{instruction}\n\n"
-        f"## Target Scene\n"
-        f"The following are rendered images of the target scene showing the desired result. Read each file before proceeding:\n"
-        f"{goal_paths}"
-    )
-
-    if version == 1 and start_code is not None:
-        prompt += (
-            f"\n\n## Initialization Script (start.py)\n"
+    if version == 3:
+        prompt = (
+            f"{system_prompt}\n\n"
+            f"## Initialization Script (start.py)\n"
             f"The following Blender Python script was used to initialize the scene. "
             f"Use only the variables, objects, and methods defined here when making your edits:\n"
-            f"```python\n{start_code}\n```"
+            f"```python\n{start_code}\n```\n\n"
+            f"## Starting Scene\n"
+            f"The following are rendered images of the current Blender scene. Read each file before proceeding:\n"
+            f"{start_paths}\n\n"
+            f"## Target Scene\n"
+            f"The following are rendered images of the target scene showing the desired result. Read each file before proceeding:\n"
+            f"{goal_paths}"
         )
+    else:
+        prompt = (
+            f"{system_prompt}\n\n"
+            f"## Starting Scene\n"
+            f"The following are rendered images of the current Blender scene. Read each file before proceeding:\n"
+            f"{start_paths}\n\n"
+            f"## Instruction\n"
+            f"{instruction}\n\n"
+            f"## Target Scene\n"
+            f"The following are rendered images of the target scene showing the desired result. Read each file before proceeding:\n"
+            f"{goal_paths}"
+        )
+
+        if version == 1 and start_code is not None:
+            prompt += (
+                f"\n\n## Initialization Script (start.py)\n"
+                f"The following Blender Python script was used to initialize the scene. "
+                f"Use only the variables, objects, and methods defined here when making your edits:\n"
+                f"```python\n{start_code}\n```"
+            )
 
     return prompt
 
@@ -163,7 +197,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1):
 
     start_script = f"{task_dir}/start.py"
     start_code = None
-    if version == 1:
+    if version in (1, 3):
         with open(start_script, "r") as f:
             start_code = f.read()
 
@@ -239,12 +273,12 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--task_name', type=str, default="blendshape1")
     parser.add_argument(
-        '--version', type=int, default=1, choices=[1, 2],
+        '--version', type=int, default=1, choices=[1, 2, 3],
         help=(
             "Experiment version. "
-            "1 (default): provides start.py as context and instructs the agent to use only "
-            "its variables and methods. "
-            "2: no start.py context; agent is free to use any approach."
+            "1 (default): provides textual instruction, rendered images, and start.py. "
+            "2: provides textual instruction and rendered images only (no start.py). "
+            "3: provides start.py and rendered images only (no textual instruction)."
         )
     )
     args = parser.parse_args()

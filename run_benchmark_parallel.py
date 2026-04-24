@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from single_task import run_task
 
 
-BENCH_DATA_DIR = f"{os.getcwd()}/bench_data"
+BENCH_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench_data")
 SKIP_ENTRIES = {"blender_files"}
 BASE_PORT = 9876
 MAX_WORKERS = 5
@@ -67,8 +67,13 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--task_type', type=str, default=None,
                         help="Filter by task type prefix, e.g. 'blendshape', 'material', 'placement'")
-    parser.add_argument('--version', type=int, default=1, choices=[1, 2],
-                        help="Experiment version: 1 (default, provides start.py) or 2 (no start.py)")
+    parser.add_argument('--version', type=int, default=1, choices=[1, 2, 3],
+                        help=(
+                            "Experiment version. "
+                            "1 (default): textual instruction + rendered images + start.py. "
+                            "2: textual instruction + rendered images (no start.py). "
+                            "3: rendered images + start.py (no textual instruction)."
+                        ))
     args = parser.parse_args()
 
     main(args)
