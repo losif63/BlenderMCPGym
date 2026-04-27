@@ -23,8 +23,9 @@ def get_blender_executable():
     """
     if "BLENDER_PATH" in os.environ:
         return os.environ["BLENDER_PATH"]
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if platform.system() == "Darwin":
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
+        return os.path.join(project_root, "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
     return "./infinigen/blender/blender"
 
 
@@ -272,7 +273,7 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1, virtual_display=False):
     edit_renders_dir = f"{task_dir}/renders/edit_{ver_tag}"
     os.makedirs(edit_renders_dir, exist_ok=True)
     print(f"[{task_dir}] Rendering edited scene...")
-    edit_render_script = f"{os.getcwd()}/bench_data/edit_render_script.py"
+    edit_render_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "edit_render_script.py")
     subprocess.run([
         get_blender_executable(),
         "--background", edit_file,

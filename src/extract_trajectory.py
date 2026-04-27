@@ -9,7 +9,8 @@ For each task's most recent session under ver1/:
 import json
 import os
 
-BENCH_DIR = os.path.join(os.path.dirname(__file__), "bench_data")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BENCH_DIR = os.path.join(PROJECT_ROOT, "bench_data")
 
 
 def get_latest_session(ver1_dir: str) -> str | None:

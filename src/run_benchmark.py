@@ -1,14 +1,12 @@
 from argparse import ArgumentParser
 import os
-from multiprocessing import Pool
 
 from single_task import run_task
 
 
-BENCH_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench_data")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BENCH_DATA_DIR = os.path.join(PROJECT_ROOT, "bench_data")
 SKIP_ENTRIES = {"blender_files"}
-BASE_PORT = 9876
-MAX_WORKERS = 5
 
 
 def get_task_dirs():
@@ -32,39 +30,34 @@ def already_done(task_dir, version):
     return os.path.isfile(edit_file) and has_renders
 
 
-def run_task_with_logging(args):
-    task_index, task_dir, version = args
-    task_name = os.path.basename(task_dir)
-    if already_done(task_dir, version):
-        print(f"[{task_name}] Skipping — edit file and renders already exist.")
-        return
-    port = BASE_PORT + (task_index % MAX_WORKERS)
-    print(f"\n[{task_name}] Starting on port {port} (version {version})...")
-    try:
-        run_task(task_dir, port=port, version=version)
-    except Exception as e:
-        print(f"[{task_name}] ERROR: {e}")
-        return
-    print(f"[{task_name}] Done.")
-
-
 def main(args):
     task_dirs = get_task_dirs()
 
     if args.task_type:
         task_dirs = [t for t in task_dirs if os.path.basename(t).startswith(args.task_type)]
 
-    indexed_tasks = [(i, d, args.version) for i, d in enumerate(task_dirs)]
-    print(f"Running {len(indexed_tasks)} tasks with up to {MAX_WORKERS} workers (version {args.version})...")
-
-    with Pool(processes=MAX_WORKERS) as pool:
-        pool.map(run_task_with_logging, indexed_tasks)
+    print(f"Running {len(task_dirs)} tasks (version {args.version})...")
+    for task_dir in task_dirs:
+        task_name = os.path.basename(task_dir)
+        if already_done(task_dir, args.version):
+            print(f"[{task_name}] Skipping — edit file and renders already exist.")
+            continue
+        print(f"\n{'='*50}")
+        print(f"Task: {task_name}")
+        print(f"{'='*50}")
+        try:
+            run_task(task_dir, version=args.version, virtual_display=args.virtual)
+        except Exception as e:
+            print(f"ERROR on {task_name}: {e}")
+            continue
 
     print("\nAll tasks complete.")
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    parser.add_argument('--virtual', action='store_true',
+                        help="Set DISPLAY=:99 when launching Blender (for headless servers with a virtual display).")
     parser.add_argument('--task_type', type=str, default=None,
                         help="Filter by task type prefix, e.g. 'blendshape', 'material', 'placement'")
     parser.add_argument('--version', type=int, default=1, choices=[1, 2, 3],

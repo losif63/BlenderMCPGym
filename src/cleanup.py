@@ -2,7 +2,8 @@ from argparse import ArgumentParser
 import os
 import shutil
 
-BENCH_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench_data")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BENCH_DATA_DIR = os.path.join(PROJECT_ROOT, "bench_data")
 SKIP_ENTRIES = {"blender_files"}
 
 

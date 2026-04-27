@@ -25,10 +25,10 @@ import subprocess
 import sys
 import tempfile
 
-BENCH_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench_data")
-BLENDER      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
-INNER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "_trajectory_blender_script.py")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BENCH_DIR    = os.path.join(PROJECT_ROOT, "bench_data")
+BLENDER      = os.path.join(PROJECT_ROOT, "infinigen", "Blender.app", "Contents", "MacOS", "Blender")
+INNER_SCRIPT = os.path.join(PROJECT_ROOT, "_trajectory_blender_script.py")
 SKIP_DIRS    = {"blender_files"}
 
 
