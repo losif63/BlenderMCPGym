@@ -10,7 +10,7 @@ import time
 
 
 BLENDERMCP_PORT = 9876
-MAX_TOOL_CALLS = 50
+MAX_TOOL_CALLS = 100
 
 
 def get_blender_executable():
@@ -217,10 +217,12 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1, virtual_display=False):
     goal_renders = f"{task_dir}/renders/goal"
     log_dir = f"{task_dir}/{ver_tag}"
 
-    with open(f"{task_dir}/detailed_instruction.txt", "r") as f:
-        content = f.read()
-    ind = content.find("INSTRUCTION:")
-    instruction = content[ind:].strip()
+    instruction = None
+    if version in (1, 2):
+        with open(f"{task_dir}/detailed_instruction.txt", "r") as f:
+            content = f.read()
+        ind = content.find("INSTRUCTION:")
+        instruction = content[ind:].strip()
 
     start_script = f"{task_dir}/start.py"
     start_code = None

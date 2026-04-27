@@ -1,0 +1,1 @@
+cp ../blender-mcp/addon.py ./infinigen/blender/3.6/scripts/addons/
