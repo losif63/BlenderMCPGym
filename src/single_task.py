@@ -224,13 +224,23 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1, virtual_display=False):
     os.makedirs(log_dir, exist_ok=True)
     session_dir = os.path.join(log_dir, "session_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
     os.makedirs(session_dir, exist_ok=True)
-    print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version}, limit {MAX_TOOL_CALLS} tool calls)...")
-    claude_proc = subprocess.Popen(
-        ["claude", "-p", prompt, "--dangerously-skip-permissions"],
-        cwd=os.getcwd(),
-        env={**os.environ, "BLENDER_MCP_SESSION_DIR": session_dir},
-    )
-    claude_proc.wait()
+    print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version})")
+    claude_log_path = os.path.join(session_dir, "claude_output.log")
+    with open(claude_log_path, "w") as claude_log_f:
+        claude_proc = subprocess.Popen(
+            ["claude", "--verbose", "--output-format", "stream-json", "-p", prompt, "--dangerously-skip-permissions"],
+            cwd=os.getcwd(),
+            env={**os.environ, "BLENDER_MCP_SESSION_DIR": session_dir},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        for line in claude_proc.stdout:
+            print(line, end="")
+            claude_log_f.write(line)
+            claude_log_f.flush()
+        claude_proc.wait()
 
     print(f"[{task_dir}] Claude Code finished. Saving Blender file...")
     save_blender_file(port=port)

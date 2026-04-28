@@ -27,7 +27,6 @@ def compare_task(task_name, version, comparisons_dir, show):
     start_renders_dir = os.path.join(task_dir, "renders", "start")
     goal_renders_dir = os.path.join(task_dir, "renders", "goal")
     edit_renders_dir = os.path.join(task_dir, "renders", f"edit_{ver_tag}")
-    description_path = os.path.join(task_dir, "detailed_instruction.txt")
     edit_file = os.path.join(task_dir, f"edit_{task_name}_{ver_tag}.blend")
 
     if not os.path.exists(edit_file):
@@ -37,11 +36,6 @@ def compare_task(task_name, version, comparisons_dir, show):
         print(f"  [{task_name}] Skipping — {edit_renders_dir} not found.")
         return False
 
-    with open(description_path, "r") as f:
-        content = f.read()
-    ind = content.find("INSTRUCTION:")
-    instruction = content[ind:].strip() if ind != -1 else content.strip()
-
     start_images = load_images(start_renders_dir)
     goal_images = load_images(goal_renders_dir)
     edit_images = load_images(edit_renders_dir)
@@ -49,7 +43,7 @@ def compare_task(task_name, version, comparisons_dir, show):
     n_cols = max(len(start_images), len(goal_images), len(edit_images))
 
     fig, axes = plt.subplots(3, n_cols, figsize=(5 * n_cols, 17))
-    fig.suptitle(f"Task: {task_name}\n\n{instruction}", fontsize=11, wrap=True)
+    fig.suptitle(f"Task: {task_name}", fontsize=11, wrap=True)
     fig.subplots_adjust(top=0.84)
 
     if n_cols == 1:
@@ -93,7 +87,7 @@ def get_all_task_names(task_type_filter):
 
 
 def main(args):
-    comparisons_dir = os.path.expanduser("~/Desktop/Research/BlenderMCPGym/comparisons")
+    comparisons_dir = os.path.join(os.getcwd(), "comparisons")
     os.makedirs(comparisons_dir, exist_ok=True)
 
     if args.all:
@@ -118,7 +112,7 @@ if __name__ == "__main__":
     group.add_argument("--all", action="store_true", help="Generate comparisons for all completed tasks")
     parser.add_argument("--task_type", nargs="+", choices=TASK_TYPES,
                         help="With --all, limit to these task types")
-    parser.add_argument("--version", type=int, default=1, choices=[1, 2],
+    parser.add_argument("--version", type=int, default=1, choices=[1, 2, 3],
                         help="Experiment version to compare (default: 1)")
     args = parser.parse_args()
 

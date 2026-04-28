@@ -1,10 +1,12 @@
 from argparse import ArgumentParser
 import os
+import re
 import shutil
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BENCH_DATA_DIR = os.path.join(PROJECT_ROOT, "bench_data")
 SKIP_ENTRIES = {"blender_files"}
+TASK_TYPES = ["blendshape", "geometry", "lighting", "material", "placement"]
 
 
 def get_task_dirs():
@@ -64,6 +66,18 @@ def main(args):
             print(f"ERROR: Task '{args.task_name}' not found.")
             return
 
+    if args.task_type:
+        type_filter = set(args.task_type)
+        filtered = []
+        for t in task_dirs:
+            m = re.match(r'^([a-z]+)\d+$', os.path.basename(t))
+            if m and m.group(1) in type_filter:
+                filtered.append(t)
+        task_dirs = filtered
+        if not task_dirs:
+            print(f"ERROR: No tasks found for task_type={sorted(type_filter)}.")
+            return
+
     cleaned = 0
     for task_dir in task_dirs:
         task_name = os.path.basename(task_dir)
@@ -78,6 +92,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task_name", type=str, default=None,
                         help="Clean up a single task. If omitted, cleans all tasks.")
+    parser.add_argument("--task_type", nargs="+", choices=TASK_TYPES,
+                        help="Limit cleanup to these task types (e.g., blendshape placement).")
     parser.add_argument("--force-delete", action="store_true",
                         help="Also delete the prev/ subdirectory.")
     args = parser.parse_args()
