@@ -7,10 +7,10 @@ import socket
 import subprocess
 import threading
 import time
+from datetime import datetime
 
 
 BLENDERMCP_PORT = 9876
-MAX_TOOL_CALLS = 100
 
 
 def get_blender_executable():
@@ -41,29 +41,29 @@ def get_blender_env(virtual_display=False):
     return env
 
 # Version 1: agent is given start.py and told to use only its variables/methods.
-SYSTEM_PROMPT_V1 = (
-    "Your task is to edit a Blender scene using BlenderMCP tools. "
-    "You will be given rendered images of the current scene, a textual instruction "
-    "describing the intended edit, rendered images of the target scene, and the Blender "
-    "Python initialization script (start.py) that was used to set up the scene. "
-    "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
-    "so that the scene matches the target rendered images as closely as possible. "
-    "IMPORTANT: Refer to the provided start.py code to understand what variables, objects, "
-    "and methods are already defined in the scene. Make your edits by building on those "
-    "existing variables and methods only — do not create new objects or use approaches "
-    "that are inconsistent with how the scene was initialized. "
-    "When you are done with all edits, stop. Do not close Blender or stop the server."
-)
+# SYSTEM_PROMPT_V1 = (
+#     "Your task is to edit a Blender scene using BlenderMCP tools. "
+#     "You will be given rendered images of the current scene, a textual instruction "
+#     "describing the intended edit, rendered images of the target scene, and the Blender "
+#     "Python initialization script (start.py) that was used to set up the scene. "
+#     "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
+#     "so that the scene matches the target rendered images as closely as possible. "
+#     "IMPORTANT: Refer to the provided start.py code to understand what variables, objects, "
+#     "and methods are already defined in the scene. Make your edits by building on those "
+#     "existing variables and methods only — do not create new objects or use approaches "
+#     "that are inconsistent with how the scene was initialized. "
+#     "When you are done with all edits, stop. Do not close Blender or stop the server."
+# )
 
 # Version 2: agent receives no start.py context and is free to use any approach.
-SYSTEM_PROMPT_V2 = (
-    "Your task is to edit a Blender scene using BlenderMCP tools. "
-    "You will be given rendered images of the current scene, a textual instruction "
-    "describing the intended edit, and rendered images of the target scene. "
-    "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
-    "so that the scene matches the target rendered images as closely as possible. "
-    "When you are done with all edits, stop. Do not close Blender or stop the server."
-)
+# SYSTEM_PROMPT_V2 = (
+#     "Your task is to edit a Blender scene using BlenderMCP tools. "
+#     "You will be given rendered images of the current scene, a textual instruction "
+#     "describing the intended edit, and rendered images of the target scene. "
+#     "Use the BlenderMCP tools to edit the Blender scene according to the instruction "
+#     "so that the scene matches the target rendered images as closely as possible. "
+#     "When you are done with all edits, stop. Do not close Blender or stop the server."
+# )
 
 # Version 3: agent receives start.py and rendered images but no textual instruction.
 SYSTEM_PROMPT_V3 = (
@@ -110,33 +110,6 @@ def count_tool_calls_in_session(session_dir):
             return sum(1 for _ in f)
     except OSError:
         return 0
-
-
-def monitor_tool_calls(log_dir, existing_sessions, proc, max_calls, check_interval=2.0):
-    """
-    Wait for a new session directory to appear under log_dir (one not in
-    existing_sessions), then watch only that session's tool_calls.jsonl and
-    terminate proc once the line count reaches max_calls.
-    """
-    # Wait for the new session dir to be created by Claude Code
-    new_session_dir = None
-    while proc.poll() is None and new_session_dir is None:
-        current = get_session_dirs(log_dir)
-        new_dirs = current - existing_sessions
-        if new_dirs:
-            new_session_dir = os.path.join(log_dir, sorted(new_dirs)[-1])
-            print(f"  [watchdog] Monitoring session: {new_session_dir}")
-        time.sleep(check_interval)
-
-    if new_session_dir is None:
-        return  # proc already finished before a new session appeared
-
-    while proc.poll() is None:
-        if count_tool_calls_in_session(new_session_dir) >= max_calls:
-            print(f"  [watchdog] Tool call limit ({max_calls}) reached — terminating claude.")
-            proc.terminate()
-            return
-        time.sleep(check_interval)
 
 
 def save_blender_file(port=BLENDERMCP_PORT):
@@ -249,21 +222,15 @@ def run_task(task_dir, port=BLENDERMCP_PORT, version=1, virtual_display=False):
         return
 
     os.makedirs(log_dir, exist_ok=True)
-    existing_sessions = get_session_dirs(log_dir)
+    session_dir = os.path.join(log_dir, "session_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
+    os.makedirs(session_dir, exist_ok=True)
     print(f"[{task_dir}] BlenderMCP server is ready. Launching Claude Code (version {version}, limit {MAX_TOOL_CALLS} tool calls)...")
     claude_proc = subprocess.Popen(
         ["claude", "-p", prompt, "--dangerously-skip-permissions"],
         cwd=os.getcwd(),
-        env={**os.environ, "BLENDER_MCP_LOG_DIR": log_dir},
+        env={**os.environ, "BLENDER_MCP_SESSION_DIR": session_dir},
     )
-    watchdog = threading.Thread(
-        target=monitor_tool_calls,
-        args=(log_dir, existing_sessions, claude_proc, MAX_TOOL_CALLS),
-        daemon=True,
-    )
-    watchdog.start()
     claude_proc.wait()
-    watchdog.join(timeout=5)
 
     print(f"[{task_dir}] Claude Code finished. Saving Blender file...")
     save_blender_file(port=port)
