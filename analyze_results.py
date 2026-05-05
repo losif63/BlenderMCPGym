@@ -1,6 +1,6 @@
 """
-Analyze ver1 experiment results: average tool calls and duration per task type.
-Uses the latest session in each task's ver1/ directory.
+Analyze ver3 experiment results: average tool calls and duration per task type.
+Uses the latest session in each task's ver3/ directory.
 """
 
 import json
@@ -15,9 +15,9 @@ TASK_TYPES = ["blendshape", "geometry", "material", "lighting", "placement"]
 SKIP_DIRS = {"blender_files"}
 
 
-def latest_session(ver1_dir: Path) -> Path | None:
+def latest_session(ver3_dir: Path) -> Path | None:
     sessions = sorted(
-        [d for d in ver1_dir.iterdir() if d.is_dir()],
+        [d for d in ver3_dir.iterdir() if d.is_dir()],
         key=lambda d: d.name,
     )
     return sessions[-1] if sessions else None
@@ -32,7 +32,7 @@ def count_tool_calls(session_dir: Path) -> int:
 
 
 def get_duration(task_dir: Path) -> float | None:
-    meta = task_dir / "metadata_ver1.json"
+    meta = task_dir / "metadata_ver3.json"
     if not meta.exists():
         return None
     with open(meta) as f:
@@ -55,11 +55,11 @@ def collect_data():
         if task_type is None:
             continue
 
-        ver1_dir = entry / "ver1"
-        if not ver1_dir.exists():
+        ver3_dir = entry / "ver3"
+        if not ver3_dir.exists():
             continue
 
-        session = latest_session(ver1_dir)
+        session = latest_session(ver3_dir)
         if session is None:
             continue
 
@@ -85,8 +85,12 @@ def summarize(stats):
             "count": len(records),
             "avg_tool_calls": np.mean(tool_calls),
             "std_tool_calls": np.std(tool_calls),
+            "min_tool_calls": np.min(tool_calls),
+            "max_tool_calls": np.max(tool_calls),
             "avg_duration_s": np.mean(durations),
             "std_duration_s": np.std(durations),
+            "min_duration_s": np.min(durations),
+            "max_duration_s": np.max(durations),
         }
     return summary
 
@@ -103,7 +107,7 @@ def plot(summary):
     width = 0.6
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle("BlenderMCPGym Ver1 Results by Task Type", fontsize=14, fontweight="bold")
+    fig.suptitle("BlenderMCPGym Ver3 Results by Task Type", fontsize=14, fontweight="bold")
 
     bars1 = ax1.bar(x, avg_calls, width,
                     color=["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B2"])
@@ -124,7 +128,7 @@ def plot(summary):
     ax2.set_ylim(0, max(avg_dur) * 1.3)
 
     plt.tight_layout()
-    out_path = Path(__file__).parent / "results_ver1.png"
+    out_path = Path(__file__).parent / "results_ver3.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"Plot saved to {out_path}")
     plt.show()
@@ -134,16 +138,23 @@ def main():
     stats = collect_data()
     summary = summarize(stats)
 
-    print(f"\n{'Task Type':<12} {'N':>4}  {'Avg Calls':>10}  {'Std Calls':>10}  {'Avg Min':>8}  {'Std Min':>8}")
-    print("-" * 62)
+    header = (
+        f"\n{'Task Type':<12} {'N':>4}  "
+        f"{'Avg Calls':>10}  {'Std Calls':>10}  {'Min Calls':>10}  {'Max Calls':>10}  "
+        f"{'Avg Min':>8}  {'Std Min':>8}  {'Min Min':>8}  {'Max Min':>8}"
+    )
+    print(header)
+    print("-" * (len(header) - 1))
     for t in TASK_TYPES:
         if t not in summary:
             continue
         s = summary[t]
         print(
-            f"{t:<12} {s['count']:>4}  {s['avg_tool_calls']:>10.2f}  "
-            f"{s['std_tool_calls']:>10.2f}  {s['avg_duration_s']/60:>8.2f}  "
-            f"{s['std_duration_s']/60:>8.2f}"
+            f"{t:<12} {s['count']:>4}  "
+            f"{s['avg_tool_calls']:>10.2f}  {s['std_tool_calls']:>10.2f}  "
+            f"{s['min_tool_calls']:>10.2f}  {s['max_tool_calls']:>10.2f}  "
+            f"{s['avg_duration_s']/60:>8.2f}  {s['std_duration_s']/60:>8.2f}  "
+            f"{s['min_duration_s']/60:>8.2f}  {s['max_duration_s']/60:>8.2f}"
         )
 
     plot(summary)
