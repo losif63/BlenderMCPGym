@@ -1,5 +1,8 @@
 bench_data/**
 plots/**
 comparisons/**
+comparisons_remote/**
 __pycache__/
 renders/**
+renders_remote/**
+renders_remote_v2/**
