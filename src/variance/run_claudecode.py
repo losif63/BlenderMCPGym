@@ -34,7 +34,10 @@ def main(args):
         image_name = Path(image).stem
         blend_path = f"recreation/{image_name}/claudecode/{args.model}/blender_file.blend"
         os.makedirs(os.path.dirname(blend_path), exist_ok=True)
-        claude_proc = subprocess.Popen(args=[claude, "--model", model_id, "-p", prompt])
+        claude_proc = subprocess.Popen(
+            args=[claude, "--model", model_id, "-p", prompt],
+            env={**os.environ, "BLENDER_MCP_SESSION_DIR": os.path.join(os.getcwd(), os.path.dirname(blend_path))}
+        )
         claude_proc.wait()
         save_blender_file(blend_path)
         blender_proc.terminate()

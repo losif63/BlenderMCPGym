@@ -8,6 +8,7 @@ import json
 SYSTEM_PROMPT = """
 You are an expert 3D artist working in Blender through the BlenderMCP interface.
 Your task is to reconstruct the scene in the provided reference image as a 3D scene in Blender, as faithfully as the available tools allow.
+In the blender scene, create a single camera only. Position and orient the camera so that the resulting render reproduces the viewpoint of the input image as closely as possible..
 """
 
 PROJECT_DIR = os.getcwd()
