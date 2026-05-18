@@ -5,26 +5,52 @@ import time
 import socket
 import json
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT_BEGINNER = """
 You are an expert 3D artist working in Blender through the BlenderMCP interface.
+Your task is to model teh object in the provided reference image as a 3D object in Blender, as faithfully as the available tools allow.
+In the blender scene, create a single camera only. Position and orient the camera so that the resulting render reproduces the viewpoint of the input image as closely as possible..
+"""
+
+SYSTEM_PROMPT_ADVANCED = """
+You are an expert 3D artist working in Blender through the BlenderMCP interface.
+You are provided a reference image. This reference image was created and rendered entirely by blender.
 Your task is to reconstruct the scene in the provided reference image as a 3D scene in Blender, as faithfully as the available tools allow.
 In the blender scene, create a single camera only. Position and orient the camera so that the resulting render reproduces the viewpoint of the input image as closely as possible..
 """
 
 PROJECT_DIR = os.getcwd()
 
-def build_prompt(image_name, plat, model_name):
+SYSTEM_PROMPTS = {
+    "beginner": SYSTEM_PROMPT_BEGINNER,
+    "advanced": SYSTEM_PROMPT_ADVANCED,
+}
+
+def infer_prompt_type(image_name):
+    stem = os.path.splitext(image_name)[0]
+    if stem.startswith("beginner"):
+        return "beginner"
+    if stem.startswith("advanced"):
+        return "advanced"
+    return None
+
+def build_prompt(image_name, plat, model_name, prompt_type=None):
+    if prompt_type is None:
+        prompt_type = infer_prompt_type(image_name)
+    if prompt_type not in SYSTEM_PROMPTS:
+        raise ValueError(f"Unknown prompt_type '{prompt_type}'. Must be one of: {list(SYSTEM_PROMPTS)}")
+    system_prompt = SYSTEM_PROMPTS[prompt_type]
+    image_stem = os.path.splitext(image_name)[0]
     prompt = (
-    f"{SYSTEM_PROMPT}\n\n"
+    f"{system_prompt}\n\n"
     "## Reference Image\n"
     "The following is the path to the reference image. Read the file before proceeding:\n"
     f"{PROJECT_DIR}/images/{image_name}\n\n"
-    "As mentioned in CLAUDE.md, save all rendered images under recreation/{image_name}/{platform}/{model_name}/process/.\n"
+    f"As mentioned in CLAUDE.md, save all rendered images under recreation/{image_stem}/{plat}/{model_name}/process/.\n"
     "The platform and model names are as follows:\n"
     f"Platform: {plat}\n"
     f"Model name: {model_name}"
     )
-    return prompt    
+    return prompt
 
 def get_blender_executable():
     """Return the Blender executable path.
