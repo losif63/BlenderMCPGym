@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shlex
 import subprocess
 from argparse import ArgumentParser
 from util import setup_blendermcp, build_prompt, save_blender_file, infer_prompt_type
@@ -27,7 +28,7 @@ def main(args):
     else:
         images = [args.image]
 
-    claude = "claude" if "deepseek" not in args.model else "claude-ds"
+    is_deepseek = "deepseek" in args.model
     model_id = MODEL_IDS[args.model]
 
     for image in images:
@@ -42,8 +43,13 @@ def main(args):
         image_name = Path(image).stem
         blend_path = f"recreation/{image_name}/claudecode/{args.model}/blender_file.blend"
         os.makedirs(os.path.dirname(blend_path), exist_ok=True)
+        if is_deepseek:
+            shell_cmd = f"source ~/.zshrc && claude-ds --model {model_id} --output-format json -p {shlex.quote(prompt)}"
+            popen_args = ["bash", "-c", shell_cmd]
+        else:
+            popen_args = ["claude", "--model", model_id, "--output-format", "json", "-p", prompt]
         claude_proc = subprocess.Popen(
-            args=[claude, "--model", model_id, "--output-format", "json", "-p", prompt],
+            args=popen_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env={**os.environ, "BLENDER_MCP_SESSION_DIR": os.path.join(os.getcwd(), os.path.dirname(blend_path))}
