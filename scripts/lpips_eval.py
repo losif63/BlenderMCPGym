@@ -26,6 +26,7 @@ MODELS = {
     "haiku4.5": "haiku-4.5",
     "sonnet4.6": "sonnet-4.6",
     "opus4.6": "opus-4.6",
+    "opus4.7": "opus-4.7"
 }
 
 # LPIPS expects tensors in [-1, 1] with shape (1, 3, H, W)

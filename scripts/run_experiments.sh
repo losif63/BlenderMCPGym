@@ -13,16 +13,18 @@ run_if_missing() {
 for filename in images/*; do
     name=$(basename "$filename")
     if [[ $name == *"advanced"* ]]; then
-        run_if_missing "$name" haiku-4.5 advanced
-        run_if_missing "$name" sonnet-4.6 advanced
-        run_if_missing "$name" opus-4.6 advanced
-        run_if_missing "$name" deepseek-v4-flash advanced
-        run_if_missing "$name" deepseek-v4-pro advanced
+        # run_if_missing "$name" haiku-4.5 advanced
+        # run_if_missing "$name" sonnet-4.6 advanced
+        # run_if_missing "$name" opus-4.6 advanced
+        run_if_missing "$name" opus-4.7 advanced
+        # run_if_missing "$name" deepseek-v4-flash advanced
+        # run_if_missing "$name" deepseek-v4-pro advanced
     elif [[ $name == *"beginner"* ]]; then
-        run_if_missing "$name" haiku-4.5 beginner
-        run_if_missing "$name" sonnet-4.6 beginner
-        run_if_missing "$name" opus-4.6 beginner
-        run_if_missing "$name" deepseek-v4-flash beginner
-        run_if_missing "$name" deepseek-v4-pro beginner
+        # run_if_missing "$name" haiku-4.5 beginner
+        # run_if_missing "$name" sonnet-4.6 beginner
+        # run_if_missing "$name" opus-4.6 beginner
+        run_if_missing "$name" opus-4.7 beginner
+        # run_if_missing "$name" deepseek-v4-flash beginner
+        # run_if_missing "$name" deepseek-v4-pro beginner
     fi
 done

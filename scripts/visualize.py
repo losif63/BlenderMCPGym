@@ -25,12 +25,13 @@ MODELS = [
     ("haiku4.5",  "haiku-4.5",  "Haiku 4.5"),
     ("sonnet4.6", "sonnet-4.6", "Sonnet 4.6"),
     ("opus4.6",   "opus-4.6",   "Opus 4.6"),
+    ("opus4.7",   "opus-4.7",   "Opus 4.7"),
 ]
 
 # (data_key, display_label, json_filename)
 METRICS = [
     ("dinov2",   "DINOv2-Large",    "dinov2_large.json"),
-    ("dinov3",   "DINOv3-ViT-B/16", "dinov3_vitb16.json"),
+    ("dinov3",   "DINOv3-ViT-L/16", "dinov3_vitl16.json"),
     ("dreamsim", "DreamSim",        "dreamsim.json"),
     ("clip",     "CLIP ViT-B/32",   "clip_vitb32.json"),
     ("lpips",    "LPIPS (Alex)",    "lpips_alex.json"),
@@ -73,13 +74,14 @@ def create_visualization(task: str, metrics_data: dict):
         renders.append((model_label, open_image(render_path)))
 
     n_metrics = len(METRICS)
-    n_cols = 4
+    n_cols = 1 + len(MODELS)
 
     img_height = 3.5
     metric_height = 0.42
     fig_height = img_height + n_metrics * metric_height + 0.5
+    fig_width = 3.5 * n_cols
 
-    fig = plt.figure(figsize=(14, fig_height))
+    fig = plt.figure(figsize=(fig_width, fig_height))
     gs = gridspec.GridSpec(
         1 + n_metrics, n_cols,
         figure=fig,
@@ -122,14 +124,22 @@ def create_visualization(task: str, metrics_data: dict):
         for spine in ax0.spines.values():
             spine.set_linewidth(0.5)
 
-        # Score cells (cols 1–3)
+        # Determine best (minimum) score across models for this metric row
+        row_scores = [task_scores.get(model_key) for model_key, _, _ in MODELS]
+        valid_scores = [s for s in row_scores if s is not None]
+        best_score = min(valid_scores) if valid_scores else None
+
+        # Score cells (cols 1–N)
         for col_idx, (model_key, _, _) in enumerate(MODELS):
             ax = fig.add_subplot(gs[row, col_idx + 1])
-            ax.set_facecolor(bg)
             score = task_scores.get(model_key)
+            is_best = best_score is not None and score == best_score
+            cell_bg = "#d4edda" if is_best else bg  # green tint for best
+            ax.set_facecolor(cell_bg)
             text = f"{score:.4f}" if score is not None else "N/A"
             ax.text(0.5, 0.5, text, ha="center", va="center",
-                    fontsize=9, transform=ax.transAxes)
+                    fontsize=9, fontweight="bold" if is_best else "normal",
+                    transform=ax.transAxes)
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():

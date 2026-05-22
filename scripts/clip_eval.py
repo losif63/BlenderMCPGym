@@ -28,6 +28,7 @@ MODELS = {
     "haiku4.5": "haiku-4.5",
     "sonnet4.6": "sonnet-4.6",
     "opus4.6": "opus-4.6",
+    "opus4.7": "opus-4.7"
 }
 
 

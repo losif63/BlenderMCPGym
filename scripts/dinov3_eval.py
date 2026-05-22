@@ -18,9 +18,9 @@ from transformers.image_utils import load_image
 ROOT = Path(__file__).resolve().parent.parent
 IMAGES_DIR = ROOT / "images"
 RECREATION_DIR = ROOT / "recreation"
-OUTPUT_FILE = ROOT / "dinov3_vitb16.json"
+OUTPUT_FILE = ROOT / "dinov3_vitl16.json"
 
-PRETRAINED_MODEL = "facebook/dinov3-vitb16-pretrain-lvd1689m"
+PRETRAINED_MODEL = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 
 TASKS = [f"advanced{i}" for i in range(1, 11)] + [f"beginner{i}" for i in range(1, 11)]
 
@@ -28,6 +28,7 @@ MODELS = {
     "haiku4.5": "haiku-4.5",
     "sonnet4.6": "sonnet-4.6",
     "opus4.6": "opus-4.6",
+    "opus4.7": "opus-4.7"
 }
 
 
