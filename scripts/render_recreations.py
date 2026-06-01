@@ -64,6 +64,8 @@ def main():
                         help="Model dir name(s) to render (default: all)")
     parser.add_argument("--task", nargs="+", default=None,
                         help="Task name(s) to render (default: all)")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-render even if render.png already exists.")
     args = parser.parse_args()
 
     models = args.model
@@ -73,6 +75,7 @@ def main():
         sys.exit(f"Blender not found at {BLENDER}")
 
     jobs: list[tuple[Path, Path]] = []
+    skipped = 0
 
     for task_dir in sorted(RECREATION_DIR.iterdir()):
         if not task_dir.is_dir() or task_dir.name.startswith("."):
@@ -85,10 +88,16 @@ def main():
             for model in models:
                 model_dir = platform_dir / model
                 blend_file = model_dir / "blender_file.blend"
-                if blend_file.exists():
-                    jobs.append((blend_file, model_dir / "render.png"))
+                if not blend_file.exists():
+                    continue
+                out_file = model_dir / "render.png"
+                if out_file.exists() and not args.force:
+                    skipped += 1
+                    continue
+                jobs.append((blend_file, out_file))
 
-    print(f"Found {len(jobs)} blend files to render.\n")
+    print(f"Found {len(jobs)} blend files to render"
+          f" ({skipped} skipped — render.png already present; pass --force to re-render).\n")
 
     success, failed = 0, 0
     for i, (blend_file, out_file) in enumerate(jobs, 1):
