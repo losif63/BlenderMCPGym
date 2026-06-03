@@ -41,9 +41,28 @@ GROUPED_IMAGE_PATTERN = re.compile(r'^(beginner|advanced)\d+\.')
 
 PLATFORM = "claudecode_v2"
 
+# Each feedback mode writes to its own platform dir so runs don't overwrite each
+# other. dinov3_only keeps the bare "claudecode_v2" for back-compat with prior
+# control runs and existing eval --platform values.
+PLATFORM_BY_MODE = {
+    "dinov3_only": "claudecode_v2",
+    "ensemble_avg": "claudecode_v2_avg",
+    "ensemble_vector": "claudecode_v2_vector",
+}
+
 FEEDBACK_SERVER = Path(__file__).resolve().parent / "feedback_mcp_server.py"
 
-FEEDBACK_DEPS = "torch", "transformers", "mcp.server.fastmcp"
+# The default ensemble pulls in timm (SigLIP2/ConvNeXt-v2/Inception), dreamsim,
+# and lpips on top of the original torch/transformers/mcp set. Probing for them
+# here surfaces a missing dep before Blender and the agent are launched.
+FEEDBACK_DEPS = (
+    "torch",
+    "transformers",
+    "mcp.server.fastmcp",
+    "timm",
+    "dreamsim",
+    "lpips",
+)
 
 
 def resolve_feedback_python() -> str:
@@ -99,23 +118,43 @@ def write_mcp_config(
     reference_image_path: str,
     score_log_path: str,
     feedback_python: str,
+    feedback_mode: str,
+    task_id: str,
+    fed_metrics=None,
+    heldout_metrics=None,
 ) -> None:
-    """Write a Claude Code --mcp-config JSON that registers the DINOv3 feedback server.
+    """Write a Claude Code --mcp-config JSON that registers the feedback server.
 
-    Uses `sys.executable` so the server runs under the same Python env that has
-    transformers/torch/mcp installed. Merged with global MCP config by default
-    (so existing blender-mcp config is preserved). SCORE_LOG_PATH tells the
-    server where to append a JSONL trajectory of every score_render call.
+    Uses `feedback_python` so the server runs under the env that has
+    torch/transformers/timm/dreamsim/lpips/mcp installed. Merged with the global
+    MCP config by default (so the existing blender-mcp config is preserved).
+
+    Env wired into the server:
+      REFERENCE_IMAGE  reference to score against.
+      SCORE_LOG_PATH   JSONL trajectory of every score_render call.
+      FEEDBACK_MODE    dinov3_only | ensemble_avg | ensemble_vector (selects the
+                       signal fed to the agent; held-out metrics are always
+                       logged but never fed).
+      TASK_ID          logged with each record.
+      FED_METRICS / HELDOUT_METRICS  optional comma lists overriding the server
+                       defaults (omitted here => server defaults apply).
     """
+    env = {
+        "REFERENCE_IMAGE": reference_image_path,
+        "SCORE_LOG_PATH": score_log_path,
+        "FEEDBACK_MODE": feedback_mode,
+        "TASK_ID": task_id,
+    }
+    if fed_metrics:
+        env["FED_METRICS"] = fed_metrics
+    if heldout_metrics:
+        env["HELDOUT_METRICS"] = heldout_metrics
     config = {
         "mcpServers": {
             "render_feedback": {
                 "command": feedback_python,
                 "args": [str(FEEDBACK_SERVER)],
-                "env": {
-                    "REFERENCE_IMAGE": reference_image_path,
-                    "SCORE_LOG_PATH": score_log_path,
-                },
+                "env": env,
             }
         }
     }
@@ -135,6 +174,7 @@ def main(args):
     model_id = MODEL_IDS[args.model]
     project_dir = os.getcwd()
     feedback_python = resolve_feedback_python()
+    platform = PLATFORM_BY_MODE[args.feedback_mode]
 
     for image in images:
         prompt_type = args.prompt_type or infer_prompt_type(image)
@@ -144,14 +184,21 @@ def main(args):
 
         image_stem = Path(image).stem
         ref_image_path = os.path.join(project_dir, "images", image)
-        base_path = f"recreation/{image_stem}/{PLATFORM}/{args.model}"
+        base_path = f"recreation/{image_stem}/{platform}/{args.model}"
         blend_path = f"{base_path}/blender_file.blend"
         os.makedirs(base_path, exist_ok=True)
 
         mcp_config_path = f"{base_path}/mcp_config.json"
         score_log_path = os.path.join(project_dir, base_path, "score_log.jsonl")
         write_mcp_config(
-            mcp_config_path, ref_image_path, score_log_path, feedback_python
+            mcp_config_path,
+            ref_image_path,
+            score_log_path,
+            feedback_python,
+            feedback_mode=args.feedback_mode,
+            task_id=image_stem,
+            fed_metrics=args.fed_metrics,
+            heldout_metrics=args.heldout_metrics,
         )
 
         blender_proc = setup_blendermcp(virtual_display=False, use_polyhaven=True)
@@ -160,9 +207,10 @@ def main(args):
 
         prompt = build_prompt(
             image_name=image,
-            plat=PLATFORM,
+            plat=platform,
             model_name=args.model,
             prompt_type=prompt_type,
+            feedback_mode=args.feedback_mode,
         )
 
         if is_deepseek:
@@ -230,6 +278,23 @@ if __name__ == '__main__':
         '--prompt-type', type=str, default=None,
         choices=['beginner', 'advanced'],
         help='System prompt to use (inferred from image name if omitted)',
+    )
+    parser.add_argument(
+        '--feedback-mode', type=str, default='dinov3_only',
+        choices=['dinov3_only', 'ensemble_avg', 'ensemble_vector'],
+        help=(
+            'Visual signal fed to the agent. dinov3_only = original control; '
+            'ensemble_avg = mean of FED-metric distances; ensemble_vector = '
+            'per-metric breakdown. Held-out metrics are always logged, never fed.'
+        ),
+    )
+    parser.add_argument(
+        '--fed-metrics', type=str, default=None,
+        help='Override FED metric set, comma-separated (default: dinov3,siglip2,convnextv2,dreamsim).',
+    )
+    parser.add_argument(
+        '--heldout-metrics', type=str, default=None,
+        help='Override held-out metric set, comma-separated (default: inception,lpips).',
     )
     args = parser.parse_args()
 

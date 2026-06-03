@@ -1,115 +1,97 @@
 #!/usr/bin/env python3
 """
-Render render.png for every haiku-4.5 / sonnet-4.6 / opus-4.6 blend file
-found under recreation/.
+Populate render.png for every run by copying the most-recent image the agent
+wrote under that run's process/ directory (selected by modification time).
+
+This replaces the previous behaviour of re-rendering each blender_file.blend in
+headless Blender: instead of producing a fresh render, we adopt the agent's last
+process/ render as the canonical render.png that the *_eval.py and montage
+scripts read. Pass --recreation-dir to also process recreation_old (the script
+auto-discovers every {task}/{platform}/{model} under each root).
 """
 
 import argparse
-import subprocess
+import shutil
 import sys
 from pathlib import Path
 
-BLENDER = Path(__file__).resolve().parent.parent / "infinigen/Blender.app/Contents/MacOS/Blender"
-RECREATION_DIR = Path(__file__).resolve().parent.parent / "recreation"
-# ALL_MODELS = ["haiku-4.5", "sonnet-4.6", "opus-4.6"]
+from eval_common import latest_process_image
+
+ROOT = Path(__file__).resolve().parent.parent
+# ALL_MODELS = ["haiku-4.5", "sonnet-4.6", "opus-4.6", "opus-4.7"]
 ALL_MODELS = ["opus-4.7"]
-
-RENDER_SCRIPT = """
-import bpy, sys
-
-blend_path = sys.argv[sys.argv.index("--") + 1]
-out_path    = sys.argv[sys.argv.index("--") + 2]
-
-bpy.ops.wm.open_mainfile(filepath=blend_path)
-
-scene = bpy.context.scene
-
-# Find the first camera in the scene
-camera = next(
-    (obj for obj in scene.objects if obj.type == "CAMERA"),
-    None,
-)
-if camera is None:
-    print("ERROR: no camera found in", blend_path, file=sys.stderr)
-    sys.exit(1)
-
-scene.camera = camera
-scene.render.filepath = out_path
-scene.render.image_settings.file_format = "PNG"
-bpy.ops.render.render(write_still=True)
-print("Rendered:", out_path)
-"""
-
-
-def render(blend_file: Path, out_file: Path) -> bool:
-    cmd = [
-        str(BLENDER),
-        "--background",
-        "--python-expr", RENDER_SCRIPT,
-        "--",
-        str(blend_file),
-        str(out_file),
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"  [FAIL] {blend_file.relative_to(RECREATION_DIR)}")
-        print(result.stderr[-2000:])
-        return False
-    return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Render blend files under recreation/")
+    parser = argparse.ArgumentParser(
+        description="Copy each run's latest process/ image to render.png."
+    )
+    parser.add_argument("--recreation-dir", nargs="+", default=["recreation"],
+                        help="Recreation root(s) to process (e.g. recreation recreation_old).")
     parser.add_argument("--model", nargs="+", default=ALL_MODELS,
-                        help="Model dir name(s) to render (default: all)")
+                        help="Model dir name(s) to process (default: opus-4.7).")
     parser.add_argument("--task", nargs="+", default=None,
-                        help="Task name(s) to render (default: all)")
+                        help="Task name(s) to process (default: all).")
     parser.add_argument("--force", action="store_true",
-                        help="Re-render even if render.png already exists.")
+                        help="Overwrite render.png even if it already exists.")
     args = parser.parse_args()
 
     models = args.model
     tasks = set(args.task) if args.task else None
 
-    if not BLENDER.exists():
-        sys.exit(f"Blender not found at {BLENDER}")
-
-    jobs: list[tuple[Path, Path]] = []
+    jobs: list[tuple[Path, Path]] = []  # (src process image, dst render.png)
     skipped = 0
+    no_process = 0
 
-    for task_dir in sorted(RECREATION_DIR.iterdir()):
-        if not task_dir.is_dir() or task_dir.name.startswith("."):
+    for rec_name in args.recreation_dir:
+        rec_dir = Path(rec_name)
+        if not rec_dir.is_absolute():
+            rec_dir = ROOT / rec_dir
+        if not rec_dir.is_dir():
+            print(f"[WARN] recreation dir not found: {rec_dir}")
             continue
-        if tasks and task_dir.name not in tasks:
-            continue
-        for platform_dir in sorted(task_dir.iterdir()):
-            if not platform_dir.is_dir():
+
+        for task_dir in sorted(rec_dir.iterdir()):
+            if not task_dir.is_dir() or task_dir.name.startswith("."):
                 continue
-            for model in models:
-                model_dir = platform_dir / model
-                blend_file = model_dir / "blender_file.blend"
-                if not blend_file.exists():
+            if tasks and task_dir.name not in tasks:
+                continue
+            for platform_dir in sorted(task_dir.iterdir()):
+                if not platform_dir.is_dir():
                     continue
-                out_file = model_dir / "render.png"
-                if out_file.exists() and not args.force:
-                    skipped += 1
-                    continue
-                jobs.append((blend_file, out_file))
+                for model in models:
+                    model_dir = platform_dir / model
+                    if not model_dir.is_dir():
+                        continue
+                    src = latest_process_image(model_dir)
+                    if src is None:
+                        no_process += 1
+                        continue
+                    dst = model_dir / "render.png"
+                    if dst.exists() and not args.force:
+                        skipped += 1
+                        continue
+                    jobs.append((src, dst))
 
-    print(f"Found {len(jobs)} blend files to render"
-          f" ({skipped} skipped — render.png already present; pass --force to re-render).\n")
+    print(f"Found {len(jobs)} render.png to write "
+          f"({skipped} skipped — already present, pass --force to overwrite; "
+          f"{no_process} runs had no process/*.png).\n")
 
-    success, failed = 0, 0
-    for i, (blend_file, out_file) in enumerate(jobs, 1):
-        label = f"{blend_file.parts[-4]}/{blend_file.parts[-3]}/{blend_file.parts[-2]}"
-        print(f"[{i}/{len(jobs)}] {label} ...", end=" ", flush=True)
-        if render(blend_file, out_file):
+    copied, failed = 0, 0
+    for i, (src, dst) in enumerate(jobs, 1):
+        label = "/".join(dst.parts[-4:-1])
+        print(f"[{i}/{len(jobs)}] {label}  <-  {src.name} ...", end=" ", flush=True)
+        try:
+            shutil.copy2(src, dst)
             print("OK")
-            success += 1
-        else:
+            copied += 1
+        except OSError as e:
+            print(f"FAIL ({e})")
             failed += 1
 
-    print(f"\nDone. {success} succeeded, {failed} failed.")
+    print(f"\nDone. {copied} copied, {failed} failed.")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

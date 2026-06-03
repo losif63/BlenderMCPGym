@@ -15,6 +15,7 @@ import lpips
 import torch
 import torchvision.transforms as T
 from pathlib import Path
+from eval_common import latest_process_image, output_suffix
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -53,8 +54,13 @@ def load_tensor(image_path: Path, size: tuple[int, int] | None = None) -> torch.
 
 
 def main(args):
-    suffix = "_v2" if args.platform == "claudecode_v2" else ""
+    recreation_dir = Path(args.recreation_dir)
+    if not recreation_dir.is_absolute():
+        recreation_dir = ROOT / recreation_dir
+    suffix = output_suffix(args.platform, recreation_dir.name)
     output_file = ROOT / f"{OUTPUT_STEM}{suffix}.json"
+    models = {k: v for k, v in MODELS.items()
+              if not args.model or v in args.model or k in args.model}
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading LPIPS (AlexNet) on {device}...")
@@ -73,10 +79,11 @@ def main(args):
 
         ref_size = (ref_tensor.shape[3], ref_tensor.shape[2])  # (W, H) for PIL
 
-        for model_key, model_dir in MODELS.items():
-            render_path = RECREATION_DIR / task / args.platform / model_dir / "render.png"
-            if not render_path.exists():
-                print(f"  [MISSING] {task}/{model_key}: {render_path}")
+        for model_key, model_dir in models.items():
+            mdir = recreation_dir / task / args.platform / model_dir
+            render_path = latest_process_image(mdir)
+            if render_path is None:
+                print(f"  [MISSING] no process/*.png: {mdir}")
                 results[task][model_key] = None
                 continue
 
@@ -98,7 +105,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--platform", default="claudecode",
-        choices=["claudecode", "claudecode_v2"],
-        help="Recreation platform dir to score. Writes *_v2.json for claudecode_v2.",
+        choices=["claudecode", "claudecode_v2", "claudecode_v2_avg", "claudecode_v2_vector"],
+        help="Recreation platform dir to score. Output suffix mirrors the platform (e.g. _v2, _v2_avg, _v2_vector).",
+    )
+    parser.add_argument(
+        "--recreation-dir", default="recreation",
+        help="Root with {task}/{platform}/{model}/process/ (e.g. recreation or recreation_old).",
+    )
+    parser.add_argument(
+        "--model", nargs="+", default=None,
+        help="Limit to these model dir names (e.g. opus-4.7). Default: all.",
     )
     main(parser.parse_args())

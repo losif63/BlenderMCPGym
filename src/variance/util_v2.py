@@ -39,12 +39,48 @@ In the blender scene, create a single camera only. Position and orient the camer
 You may use free 3D assets from PolyHaven when they help you faithfully reproduce the reference. PolyHaven access is already enabled in BlenderMCP — search assets with `mcp__blender__search_polyhaven_assets`, list categories with `mcp__blender__get_polyhaven_categories`, and bring an asset into the current scene with `mcp__blender__download_polyhaven_asset`. You can call `mcp__blender__get_polyhaven_status` first to confirm it is enabled.
 """
 
-SCORING_PROTOCOL = """
+# The signal paragraph + the score-step label vary by feedback_mode. The
+# dinov3_only text is kept byte-identical to the original so the control prompt
+# is unchanged. Held-out metrics are never surfaced to the agent.
+_SIGNAL_PARAGRAPH = {
+    "dinov3_only": (
+        "The tool returns the cosine distance between your render and the reference "
+        "image, computed with the DINOv3 model. Lower is closer to the reference; "
+        "0.0 means identical embeddings. This is the exact metric your final output "
+        "is evaluated by, so treat each returned score as objective signal for "
+        "whether your last edit moved the scene closer to the target."
+    ),
+    "ensemble_avg": (
+        "The tool returns a single visual-distance score: the mean of several "
+        "image-similarity metrics comparing your render to the reference image. "
+        "Lower is closer to the reference. Treat each returned score as objective "
+        "signal for whether your last edit moved the scene closer to the target."
+    ),
+    "ensemble_vector": (
+        "The tool returns a labeled breakdown of several image-similarity distances "
+        "(e.g. DINOv3, SigLIP2, ConvNeXt2, DreamSim) comparing your render to the "
+        "reference image. Lower is closer on every metric. Use the breakdown to "
+        "reason about which aspect of the scene is still off, and treat the scores "
+        "as objective signal for whether your last edit moved closer to the target."
+    ),
+}
+
+_SCORE_STEP_LABEL = {
+    "dinov3_only": "get the DINOv3 distance",
+    "ensemble_avg": "get the visual feedback score",
+    "ensemble_vector": "get the per-metric visual feedback",
+}
+
+
+def build_scoring_protocol(feedback_mode="dinov3_only"):
+    signal = _SIGNAL_PARAGRAPH[feedback_mode]
+    score_label = _SCORE_STEP_LABEL[feedback_mode]
+    return f"""
 ## Scoring protocol (MANDATORY)
 
 After every PNG you render to the process/ directory, your VERY NEXT tool call MUST be `mcp__render_feedback__score_render` with the absolute path of that PNG as the `render_path` argument. The tool is already registered and available in your tool palette — you do not need to discover it or set anything up.
 
-The tool returns the cosine distance between your render and the reference image, computed with the DINOv3 model. Lower is closer to the reference; 0.0 means identical embeddings. This is the exact metric your final output is evaluated by, so treat each returned score as objective signal for whether your last edit moved the scene closer to the target.
+{signal}
 
 Hard rules — do not violate these:
   - Do NOT write your own Python script to compute the distance. The dependencies are not available in your shell environment.
@@ -54,9 +90,13 @@ Hard rules — do not violate these:
 
 Example sequence for one iteration:
   1. `mcp__blender__execute_blender_code` — apply edits and render to `…/process/iter_N.png`
-  2. `mcp__render_feedback__score_render` with `render_path="…/process/iter_N.png"` — get the DINOv3 distance
-  3. Use the returned distance to decide your next edit
+  2. `mcp__render_feedback__score_render` with `render_path="…/process/iter_N.png"` — {score_label}
+  3. Use the returned score to decide your next edit
 """
+
+
+# Back-compat: the default (control) protocol string, unchanged from v2.
+SCORING_PROTOCOL = build_scoring_protocol("dinov3_only")
 
 PROJECT_DIR = os.getcwd()
 
@@ -66,7 +106,7 @@ SYSTEM_PROMPTS = {
 }
 
 
-def build_prompt(image_name, plat, model_name, prompt_type=None):
+def build_prompt(image_name, plat, model_name, prompt_type=None, feedback_mode="dinov3_only"):
     if prompt_type is None:
         prompt_type = infer_prompt_type(image_name)
     if prompt_type not in SYSTEM_PROMPTS:
@@ -75,6 +115,7 @@ def build_prompt(image_name, plat, model_name, prompt_type=None):
         )
     system_prompt = SYSTEM_PROMPTS[prompt_type]
     image_stem = os.path.splitext(image_name)[0]
+    scoring_protocol = build_scoring_protocol(feedback_mode)
     prompt = (
         f"{system_prompt}\n\n"
         "## Reference Image\n"
@@ -84,7 +125,7 @@ def build_prompt(image_name, plat, model_name, prompt_type=None):
         "The platform and model names are as follows:\n"
         f"Platform: {plat}\n"
         f"Model name: {model_name}\n"
-        f"{SCORING_PROTOCOL}"
+        f"{scoring_protocol}"
     )
     return prompt
 

@@ -1,7 +1,13 @@
 """
-Compute DreamSim distances between reference images and
-model-reconstructed renders. Results saved to dreamsim.json (or
-dreamsim_v2.json when --platform claudecode_v2 is passed).
+Compute SigLIP2 cosine distances between reference images and
+model-reconstructed renders. Results saved to siglip2_vitb16.json (or
+siglip2_vitb16_v2.json when --platform claudecode_v2 is passed).
+
+The distance is computed through the shared in-run metric module
+(src/variance/metrics.py), so the checkpoint, preprocessing, device handling,
+and cosine-distance definition are byte-for-byte identical to the SigLIP2 signal
+the agent receives during a v2 run. Override the checkpoint with --checkpoint to
+match a swapped in-run variant.
 
 Structure:
   Reference: images/{task_name}.{ext}
@@ -11,15 +17,18 @@ Structure:
 import argparse
 import json
 import glob
+import sys
 from pathlib import Path
 from eval_common import latest_process_image, output_suffix
-from PIL import Image
-from dreamsim import dreamsim
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src" / "variance"))
+from metrics import build_metric  # noqa: E402
+
 IMAGES_DIR = ROOT / "images"
 RECREATION_DIR = ROOT / "recreation"
-OUTPUT_STEM = "dreamsim"
+OUTPUT_STEM = "siglip2_vitb16"
+METRIC = "siglip2"
 
 TASKS = [f"advanced{i}" for i in range(1, 11)] + [f"beginner{i}" for i in range(1, 11)]
 
@@ -47,9 +56,8 @@ def main(args):
     models = {k: v for k, v in MODELS.items()
               if not args.model or v in args.model or k in args.model}
 
-    device = "cuda" if __import__("torch").cuda.is_available() else "cpu"
-    print(f"Loading DreamSim on {device}...")
-    model, preprocess = dreamsim(pretrained=True, device=device)
+    metric = build_metric(METRIC, checkpoint=args.checkpoint)
+    print(f"Loaded {METRIC} ({metric.checkpoint}) on {metric.device}")
 
     results = {}
 
@@ -57,7 +65,6 @@ def main(args):
         results[task] = {}
         try:
             ref_path = find_reference_image(task)
-            ref_tensor = preprocess(Image.open(ref_path).convert("RGB")).to(device)
         except FileNotFoundError as e:
             print(f"  [SKIP] {e}")
             continue
@@ -70,8 +77,7 @@ def main(args):
                 results[task][model_key] = None
                 continue
 
-            render_tensor = preprocess(Image.open(render_path).convert("RGB")).to(device)
-            dist = model(ref_tensor, render_tensor).item()
+            dist = metric.distance(str(ref_path), str(render_path))
             results[task][model_key] = dist
             print(f"  {task} / {model_key}: {dist:.6f}")
 
@@ -86,6 +92,10 @@ if __name__ == "__main__":
         "--platform", default="claudecode",
         choices=["claudecode", "claudecode_v2", "claudecode_v2_avg", "claudecode_v2_vector"],
         help="Recreation platform dir to score. Output suffix mirrors the platform (e.g. _v2, _v2_avg, _v2_vector).",
+    )
+    parser.add_argument(
+        "--checkpoint", default=None,
+        help="Override the SigLIP2 timm checkpoint (default: metric module default).",
     )
     parser.add_argument(
         "--recreation-dir", default="recreation",
