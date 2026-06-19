@@ -1,4 +1,5 @@
 bench_data/**
+bench_data_old/**
 plots/**
 comparisons/**
 comparisons_remote/**
@@ -7,3 +8,20 @@ renders/**
 renders_remote/**
 renders_remote_v2/**
 recreation/**
+recreation_copy/**
+recreation_old/**
+images/**
+models/**
+.claude/**
+
+# Suite A reorg: heavy data trees are ignored; manifests/configs stay tracked.
+/data/_archive/renders/
+/data/_archive/renders_remote/
+/data/_archive/renders_remote_v2/
+/data/_archive/comparisons/
+/data/_archive/comparisons_remote/
+/data/_archive/plots/
+/data/runs/
+/data/results/
+data/**
+demo/**
