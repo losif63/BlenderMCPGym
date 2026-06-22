@@ -52,6 +52,13 @@ def render_all_cameras(rendering_dir):
 
     Assumes the active scene already holds the edits to render. Callers are
     responsible for selecting the device first (configure_cycles_device()).
+
+    Each camera is rendered independently and guarded: a failure on one view is
+    reported and the loop continues, so a single bad render can't silently
+    truncate the rest. (When driven from a live GUI session over the socket, an
+    unguarded exception mid-loop is what leaves only the first camera or two
+    rendered.) Progress is printed so the caller can confirm what was written,
+    and the list of files actually produced is returned.
     """
     os.makedirs(rendering_dir, exist_ok=True)
     scene = bpy.context.scene
@@ -61,12 +68,32 @@ def render_all_cameras(rendering_dir):
     scene.render.image_settings.color_mode = 'RGB'
     scene.render.image_settings.file_format = 'PNG'
 
+    # Flush pending lighting/material edits into the dependency graph so the first
+    # render captures the edited scene rather than a stale evaluation of it.
+    bpy.context.view_layer.update()
+
+    written = []
     for cam_name in ['Camera1', 'Camera2', 'Camera3', 'Camera4', 'Camera5']:
-        if cam_name in bpy.data.objects:
-            scene.camera = bpy.data.objects[cam_name]
-            idx = cam_name[-1]
-            scene.render.filepath = os.path.join(rendering_dir, f'render{idx}.png')
+        if cam_name not in bpy.data.objects:
+            continue
+        scene.camera = bpy.data.objects[cam_name]
+        idx = cam_name[-1]
+        out_path = os.path.join(rendering_dir, f'render{idx}.png')
+        scene.render.filepath = out_path
+        try:
             bpy.ops.render.render(write_still=True)
+        except Exception as exc:  # report and move on to the next camera
+            print(f"RENDER_FAIL {cam_name}: {exc}")
+            continue
+        if os.path.exists(out_path):
+            written.append(out_path)
+            print(f"RENDER_OK {cam_name} -> {os.path.basename(out_path)}")
+        else:
+            print(f"RENDER_MISSING {cam_name}: no file written to {out_path}")
+
+    print(f"RENDER_SUMMARY {len(written)} written: "
+          f"{[os.path.basename(p) for p in written]}")
+    return written
 
 
 if __name__ == "__main__":

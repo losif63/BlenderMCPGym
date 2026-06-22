@@ -143,21 +143,23 @@ def render_in_session(rendering_dir, port: int = BLENDERMCP_PORT, timeout: float
     scene is rendered — lighting and material changes in particular. A reopen would
     render the saved file, which can omit those, yielding meaningless renders.
 
-    The render logic is the same code path as the standalone script: we load
-    edit_render_script.py by file path inside Blender (bypassing the package
-    __init__, which Blender's bundled Python can't necessarily import) and call its
-    configure_cycles_device() + render_all_cameras(). ``timeout`` bounds the socket
-    read, which must cover the full multi-camera Cycles render at 512 samples.
+    The render logic is the same code as the standalone script: we send the
+    *source* of edit_render_script.py over the socket and exec it verbatim, then
+    call its configure_cycles_device() + render_all_cameras() explicitly. Sending
+    the source (rather than importing by path) keeps the executed code identical
+    to the ``--python edit_render_script.py`` run, with no import indirection to
+    fail silently. A leading ``__name__`` assignment keeps the script's
+    ``if __name__ == "__main__"`` block (which reads sys.argv) from firing.
+    ``timeout`` bounds the socket read, which must cover the full multi-camera
+    Cycles render at 512 samples.
     """
-    script_path = str(edit_render_script_path())
+    source = edit_render_script_path().read_text()
     out_dir = str(rendering_dir)
     code = (
-        "import importlib.util as _ilu\n"
-        f"_spec = _ilu.spec_from_file_location('blendergym_edit_render', {script_path!r})\n"
-        "_mod = _ilu.module_from_spec(_spec)\n"
-        "_spec.loader.exec_module(_mod)\n"
-        "_mod.configure_cycles_device()\n"
-        f"_mod.render_all_cameras({out_dir!r})\n"
+        "__name__ = 'blendergym_edit_render'\n"  # suppress the script's __main__ block
+        + source
+        + "\nconfigure_cycles_device()\n"
+        + f"render_all_cameras({out_dir!r})\n"
     )
     command = json.dumps({"type": "execute_code", "params": {"code": code}})
 
@@ -174,7 +176,31 @@ def render_in_session(rendering_dir, port: int = BLENDERMCP_PORT, timeout: float
             try:
                 response = json.loads(buf.decode("utf-8"))
                 break
-            except json.JSONDecodeError:
-                continue  # partial JSON; keep reading
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue  # partial frame; keep reading
+    _report_render_result(response, rendering_dir)
+
+
+def _report_render_result(response, rendering_dir) -> None:
+    """Surface the in-session render outcome and verify images landed on disk.
+
+    The render runs inside Blender, so its only feedback is the JSON response and
+    the files it leaves behind. We echo the script's captured stdout (the per-
+    camera RENDER_OK/RENDER_FAIL lines) and warn if Blender reported an error or
+    if the render directory ended up empty — failures that would otherwise be
+    invisible until evaluation finds missing views.
+    """
     if not response or response.get("status") != "success":
         print(f"WARNING: in-session render returned unexpected response: {response}")
+        return
+    # execute_code nests the captured stdout at result.result.
+    captured = (response.get("result") or {}).get("result", "")
+    if captured and captured.strip():
+        print(captured.rstrip())
+
+    rendering_dir = Path(rendering_dir)
+    images = sorted(p.name for p in rendering_dir.glob("*.png")) if rendering_dir.is_dir() else []
+    if not images:
+        print(f"WARNING: in-session render produced no images in {rendering_dir}")
+    else:
+        print(f"[render] {len(images)} image(s) written: {images}")
